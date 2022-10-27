@@ -24,10 +24,10 @@ class LazyIndex(hnswlib.Index):
         if self.max_elements==0:
             return []
         return super().get_items(ids)
-    def knn_query(self, data,k=1, num_threads=-1):
+    def knn_query(self, data,k=1, num_threads=-1, filter=None):
         if self.max_elements==0:
             return [], []
-        return super().knn_query(data, k, num_threads)
+        return super().knn_query(data, k, num_threads, filter)
     def resize_index(self, size):
         if self.max_elements==0:
             return self.init_index(size)
