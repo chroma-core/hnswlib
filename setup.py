@@ -91,6 +91,10 @@ class BuildExt(build_ext):
         c_opts['unix'] += ['-stdlib=libc++', '-mmacosx-version-min=10.7']
         link_opts['unix'] += ['-stdlib=libc++', '-mmacosx-version-min=10.7']
     else:
+        import subprocess
+        if subprocess.check_output(['uname', '-p']).decode('utf-8').strip() == 'ppc64le':
+            c_opts['unix'].remove('-march=native')
+            c_opts['unix'].append('-mcpu=native')
         c_opts['unix'].append("-fopenmp")
         link_opts['unix'].extend(['-fopenmp', '-pthread'])
 
