@@ -32,7 +32,7 @@ namespace hnswlib
         size_t maxM_{0};
         size_t maxM0_{0};
         size_t ef_construction_{0};
-        size_t ef_{0};
+        size_t ef_search_default_{0};
 
         double mult_{0.0}, revSize_{0.0};
         int maxlevel_{0};
@@ -119,6 +119,7 @@ namespace hnswlib
             size_t max_elements,
             size_t M = 16,
             size_t ef_construction = 200,
+            size_t ef_search_default = 10,
             size_t random_seed = 100,
             bool allow_replace_deleted = false,
             bool normalize = false,
@@ -141,7 +142,7 @@ namespace hnswlib
             maxM_ = M_;
             maxM0_ = M_ * 2;
             ef_construction_ = std::max(ef_construction, M_);
-            ef_ = 10;
+            ef_search_default_ = ef_search_default;
 
             level_generator_.seed(random_seed);
             update_probability_generator_.seed(random_seed + 1);
@@ -208,9 +209,9 @@ namespace hnswlib
             }
         };
 
-        void setEf(size_t ef)
+        void setEfSearchDefault(size_t ef)
         {
-            ef_ = ef;
+            ef_search_default_ = ef;
         }
 
         inline std::mutex &getLabelOpMutex(labeltype label) const
@@ -746,6 +747,7 @@ namespace hnswlib
             writeBinaryPOD(output, M_);
             writeBinaryPOD(output, mult_);
             writeBinaryPOD(output, ef_construction_);
+            writeBinaryPOD(output, ef_search_default_);
 
             output.write(data_level0_memory_, cur_element_count * size_data_per_element_);
             output.write(length_memory_, cur_element_count * sizeof(float));
@@ -1006,6 +1008,7 @@ namespace hnswlib
             readBinaryPOD(input_header, M_);
             readBinaryPOD(input_header, mult_);
             readBinaryPOD(input_header, ef_construction_);
+            readBinaryPOD(input_header, ef_search_default_);
             input_header.close();
 
             data_size_ = s->get_data_size();
@@ -1064,7 +1067,6 @@ namespace hnswlib
                 throw std::runtime_error("Not enough memory: loadPersistedIndex failed to allocate linklists");
             element_levels_ = std::vector<int>(max_elements_);
             revSize_ = 1.0 / mult_;
-            ef_ = 10;
             for (size_t i = 0; i < cur_element_count; i++)
             {
                 label_lookup_[getExternalLabel(i)] = i;
@@ -1130,6 +1132,7 @@ namespace hnswlib
             readBinaryPOD(input, M_);
             readBinaryPOD(input, mult_);
             readBinaryPOD(input, ef_construction_);
+            readBinaryPOD(input, ef_search_default_);
 
             data_size_ = s->get_data_size();
             fstdistfunc_ = s->get_dist_func();
@@ -1715,7 +1718,7 @@ namespace hnswlib
         }
 
         std::priority_queue<std::pair<dist_t, labeltype>>
-        searchKnn(const void *query_data, size_t k, BaseFilterFunctor *isIdAllowed = nullptr) const
+        searchKnn(const void *query_data, size_t k, BaseFilterFunctor *isIdAllowed = nullptr, const std::optional<size_t> ef_search = std::nullopt) const
         {
             std::priority_queue<std::pair<dist_t, labeltype>> result;
             if (cur_element_count == 0)
@@ -1758,12 +1761,12 @@ namespace hnswlib
             if (num_deleted_)
             {
                 top_candidates = searchBaseLayerST<true, true>(
-                    currObj, query_data, std::max(ef_, k), isIdAllowed);
+                    currObj, query_data, std::max(ef_search.value_or(ef_search_default_), k), isIdAllowed);
             }
             else
             {
                 top_candidates = searchBaseLayerST<false, true>(
-                    currObj, query_data, std::max(ef_, k), isIdAllowed);
+                    currObj, query_data, std::max(ef_search.value_or(ef_search_default_), k), isIdAllowed);
             }
 
             while (top_candidates.size() > k)

@@ -35,7 +35,7 @@ class RandomSelfTestCase(unittest.TestCase):
 
             # Controlling the recall by setting ef:
             # higher ef leads to better accuracy, but slower search
-            p.set_ef(100)
+            p.set_ef_search_default(100)
 
             p.set_num_threads(4)  # by default using all available cores
 
@@ -77,7 +77,7 @@ class RandomSelfTestCase(unittest.TestCase):
 
             print("\nLoading index from '%s'\n" % index_path)
             p.load_index(index_path)
-            p.set_ef(100)
+            p.set_ef_search_default(100)
 
             print("Adding the second batch of %d elements" % (len(data2)))
             p.add_items(data2)
@@ -126,7 +126,7 @@ class RandomSelfTestCase(unittest.TestCase):
             p.save_index(del_index_path)
             p = hnswlib.Index(space="l2", dim=dim)
             p.load_index(del_index_path)
-            p.set_ef(100)
+            p.set_ef_search_default(100)
 
             labels1_after, _ = p.knn_query(data1, k=1)
             for la in labels1_after:

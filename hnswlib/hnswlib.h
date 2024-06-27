@@ -180,7 +180,7 @@ namespace hnswlib
         virtual void addPoint(const void *datapoint, labeltype label, bool replace_deleted = false) = 0;
 
         virtual std::priority_queue<std::pair<dist_t, labeltype>>
-        searchKnn(const void *, size_t, BaseFilterFunctor *isIdAllowed = nullptr) const = 0;
+        searchKnn(const void *, size_t, BaseFilterFunctor *isIdAllowed = nullptr, const std::optional<size_t> ef_search = std::nullopt) const = 0;
 
         // Return k nearest neighbor in the order of closer fist
         virtual std::vector<std::pair<dist_t, labeltype>>

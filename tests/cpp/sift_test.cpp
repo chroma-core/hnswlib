@@ -146,9 +146,8 @@ void test_vs_recall(
     /*for (int i = 300; i <600; i += 20) {
         efs.push_back(i);
     }*/
-    for (size_t ef : efs)
-    {
-        appr_alg.setEf(ef);
+    for (size_t ef : efs) {
+        appr_alg.setEfSearchDefault(ef);
         StopW stopw = StopW();
 
         float recall = test_approx(massQ, vecsize, qsize, appr_alg, vecdim, answers, k);
@@ -281,65 +280,65 @@ void sift_test()
     // appr_alg.opt = true;
 
     return;
-    // test_approx(mass, massQ, vecsize, qsize, appr_alg, vecdim, answers);
-    //    //return;
-    //
-    //    cout << appr_alg.maxlevel_ << "\n";
-    //    //CHECK:
-    //    //for (size_t io = 0; io < vecsize; io++) {
-    //    //    if (appr_alg.getExternalLabel(io) != io)
-    //    //        throw new exception("bad!");
-    //    //}
-    //    DISTFUNC<float> fstdistfunc_ = l2space.get_dist_func();
-    ////#pragma omp parallel for
-    //    for (int i = 0; i < vecsize; i++) {
-    //        int *data = (int *)(appr_alg.linkList0_ + i * appr_alg.size_links_per_element0_);
-    //        //cout << "numconn:" << *data<<"\n";
-    //        tableint *datal = (tableint *)(data + 1);
-    //
-    //        std::priority_queue< std::pair< float, tableint >> rez;
-    //        unordered_set <tableint> g;
-    //        for (int j = 0; j < *data; j++) {
-    //            g.insert(datal[j]);
-    //        }
-    //        appr_alg.setEf(400);
-    //        std::priority_queue< std::pair< float, tableint >> closest_elements = appr_alg.searchKnnInternal(appr_alg.getDataByInternalId(i), 17);
-    //        while (closest_elements.size() > 0) {
-    //            if (closest_elements.top().second != i) {
-    //                 g.insert(closest_elements.top().second);
-    //            }
-    //            closest_elements.pop();
-    //        }
-    //
-    //        for (tableint l : g) {
-    //            float other = fstdistfunc_(appr_alg.getDataByInternalId(l), appr_alg.getDataByInternalId(i), l2space.get_dist_func_param());
-    //            rez.emplace(other, l);
-    //        }
-    //        while (rez.size() > 32)
-    //            rez.pop();
-    //        int len = rez.size();
-    //        *data = len;
-    //        // check there are no loop connections created
-    //        for (int j = 0; j < len; j++) {
-    //            datal[j] = rez.top().second;
-    //            if (datal[j] == i)
-    //                throw new exception();
-    //            rez.pop();
-    //        }
-    //
-    //    }
-    //
-    //    //get_knn_quality(massA, vecsize, maxn, appr_alg);
-    //    test_vs_recall( massQ, vecsize, qsize, appr_alg, vecdim, answers, k);
-    //    /*test_vs_recall( massQ, vecsize, qsize, appr_alg, vecdim, answers, k);
-    //    test_vs_recall( massQ, vecsize, qsize, appr_alg, vecdim, answers, k);
-    //    test_vs_recall( massQ, vecsize, qsize, appr_alg, vecdim, answers, k);*/
-    //
-    //
-    //
-    //
-    //
-    //    /*for(int i=0;i<1000;i++)
-    //        cout << mass[i] << "\n";*/
-    //        //("11", std::ios::binary);
+    //test_approx(mass, massQ, vecsize, qsize, appr_alg, vecdim, answers);
+//    //return;
+//
+//    cout << appr_alg.maxlevel_ << "\n";
+//    //CHECK:
+//    //for (size_t io = 0; io < vecsize; io++) {
+//    //    if (appr_alg.getExternalLabel(io) != io)
+//    //        throw new exception("bad!");
+//    //}
+//    DISTFUNC<float> fstdistfunc_ = l2space.get_dist_func();
+////#pragma omp parallel for
+//    for (int i = 0; i < vecsize; i++) {
+//        int *data = (int *)(appr_alg.linkList0_ + i * appr_alg.size_links_per_element0_);
+//        //cout << "numconn:" << *data<<"\n";
+//        tableint *datal = (tableint *)(data + 1);
+//
+//        std::priority_queue< std::pair< float, tableint >> rez;
+//        unordered_set <tableint> g;
+//        for (int j = 0; j < *data; j++) {
+//            g.insert(datal[j]);
+//        }
+//        appr_alg.setEfSearchDefault(400);
+//        std::priority_queue< std::pair< float, tableint >> closest_elements = appr_alg.searchKnnInternal(appr_alg.getDataByInternalId(i), 17);
+//        while (closest_elements.size() > 0) {
+//            if (closest_elements.top().second != i) {
+//                 g.insert(closest_elements.top().second);
+//            }
+//            closest_elements.pop();
+//        }
+//
+//        for (tableint l : g) {
+//            float other = fstdistfunc_(appr_alg.getDataByInternalId(l), appr_alg.getDataByInternalId(i), l2space.get_dist_func_param());
+//            rez.emplace(other, l);
+//        }
+//        while (rez.size() > 32)
+//            rez.pop();
+//        int len = rez.size();
+//        *data = len;
+//        // check there are no loop connections created
+//        for (int j = 0; j < len; j++) {
+//            datal[j] = rez.top().second;
+//            if (datal[j] == i)
+//                throw new exception();
+//            rez.pop();
+//        }
+//
+//    }
+//
+//    //get_knn_quality(massA, vecsize, maxn, appr_alg);
+//    test_vs_recall( massQ, vecsize, qsize, appr_alg, vecdim, answers, k);
+//    /*test_vs_recall( massQ, vecsize, qsize, appr_alg, vecdim, answers, k);
+//    test_vs_recall( massQ, vecsize, qsize, appr_alg, vecdim, answers, k);
+//    test_vs_recall( massQ, vecsize, qsize, appr_alg, vecdim, answers, k);*/
+//
+//
+//
+//
+//
+//    /*for(int i=0;i<1000;i++)
+//        cout << mass[i] << "\n";*/
+//        //("11", std::ios::binary);
 }

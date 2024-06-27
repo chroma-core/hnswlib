@@ -44,11 +44,11 @@ class LazyIndex(hnswlib.Index):
         else:
             return super().resize_index(size)
 
-    def set_ef(self, ef):
+    def set_ef_search_default(self, ef):
         if self.max_elements == 0:
             self.init_ef_construction = ef
             return
-        super().set_ef(ef)
+        super().set_ef_search_default(ef)
 
     def get_max_elements(self):
         return self.max_elements

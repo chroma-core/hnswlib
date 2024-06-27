@@ -8,7 +8,7 @@ import setuptools
 from setuptools import Extension, setup
 from setuptools.command.build_ext import build_ext
 
-__version__ = "0.7.4"
+__version__ = "0.7.5"
 
 include_dirs = [
     pybind11.get_include(),
@@ -59,9 +59,11 @@ def has_flag(compiler, flagname):
 
 
 def cpp_flag(compiler):
-    """Return the -std=c++[11/14] compiler flag.
-    The c++14 is prefered over c++11 (when it is available).
+    """Return the -std=c++[11/14/17] compiler flag.
+    The c++14 is prefered over c++17 (when it is available).
     """
+    if has_flag(compiler, "-std=c++17"):
+        return "-std=c++17"
     if has_flag(compiler, "-std=c++14"):
         return "-std=c++14"
     elif has_flag(compiler, "-std=c++11"):

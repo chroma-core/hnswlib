@@ -98,8 +98,8 @@ def test_space_main(self, space, dim):
         max_elements=self.num_elements, ef_construction=self.ef_construction, M=self.M
     )
 
-    p.ef = self.ef
-    p0.ef = self.ef
+    p.ef_search_default = self.ef_search_default
+    p0.ef_search_default = self.ef_search_default
 
     p1 = pickle.loads(pickle.dumps(p))  # pickle Index before adding items
 
@@ -171,10 +171,18 @@ def test_space_main(self, space, dim):
     )
 
     # Check ef parameter value
-    self.assertEqual(p.ef, self.ef, "incorrect value of p.ef")
-    self.assertEqual(p0.ef, self.ef, "incorrect value of p0.ef")
-    self.assertEqual(p2.ef, self.ef, "incorrect value of p2.ef")
-    self.assertEqual(p1.ef, self.ef, "incorrect value of p1.ef")
+    self.assertEqual(
+        p.ef_search_default, self.ef_search_default, "incorrect value of p.ef"
+    )
+    self.assertEqual(
+        p0.ef_search_default, self.ef_search_default, "incorrect value of p0.ef"
+    )
+    self.assertEqual(
+        p2.ef_search_default, self.ef_search_default, "incorrect value of p2.ef"
+    )
+    self.assertEqual(
+        p1.ef_search_default, self.ef_search_default, "incorrect value of p1.ef"
+    )
 
     # Check M parameter value
     self.assertEqual(p.M, self.M, "incorrect value of p.M")
@@ -207,7 +215,7 @@ class PickleUnitTests(unittest.TestCase):
     def setUp(self):
         self.ef_construction = 200
         self.M = 32
-        self.ef = 400
+        self.ef_search_default = 400
 
         self.num_elements = 1000
         self.num_test_elements = 100

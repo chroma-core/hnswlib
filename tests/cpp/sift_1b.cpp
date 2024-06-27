@@ -235,9 +235,8 @@ test_vs_recall(
     {
         efs.push_back(i);
     }
-    for (size_t ef : efs)
-    {
-        appr_alg.setEf(ef);
+    for (size_t ef : efs) {
+        appr_alg.setEfSearchDefault(ef);
         StopW stopw = StopW();
 
         float recall = test_approx(massQ, vecsize, qsize, appr_alg, vecdim, answers, k);

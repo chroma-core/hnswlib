@@ -34,7 +34,7 @@ class RandomSelfTestCase(unittest.TestCase):
 
             # Controlling the recall by setting ef:
             # higher ef leads to better accuracy, but slower search
-            p.set_ef(20)
+            p.set_ef_search_default(20)
 
             p.set_num_threads(idx % 8)  # by default using all available cores
 

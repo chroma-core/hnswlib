@@ -167,9 +167,8 @@ test_vs_recall(
     std::cout << "ef\trecall\ttime\thops\tdistcomp\n";
 
     bool test_passed = false;
-    for (size_t ef : efs)
-    {
-        appr_alg.setEf(ef);
+    for (size_t ef : efs) {
+        appr_alg.setEfSearchDefault(ef);
 
         appr_alg.metric_hops = 0;
         appr_alg.metric_distance_computations = 0;
