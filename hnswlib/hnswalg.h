@@ -1772,12 +1772,12 @@ namespace hnswlib
             if (num_deleted_)
             {
                 top_candidates = searchBaseLayerST<true, true>(
-                    currObj, query_data, std::max(ef_search.value_or(ef_search_default_), k), isIdAllowed);
+                    currObj, query_data, std::max(ef_search, k), isIdAllowed);
             }
             else
             {
                 top_candidates = searchBaseLayerST<false, true>(
-                    currObj, query_data, std::max(ef_search.value_or(ef_search_default_), k), isIdAllowed);
+                    currObj, query_data, std::max(ef_search, k), isIdAllowed);
             }
 
             while (top_candidates.size() > k)
