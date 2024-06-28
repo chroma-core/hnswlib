@@ -42,4 +42,4 @@ print(f"Index construction: M={p_copy.M}, ef_construction={p_copy.ef_constructio
 print(
     f"Index size is {p_copy.element_count} and index capacity is {p_copy.max_elements}"
 )
-print(f"Search speed/quality trade-off parameter: ef={p_copy.ef}")
+print(f"Search speed/quality trade-off parameter: ef={p_copy.ef_search_default}")

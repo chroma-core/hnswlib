@@ -37,7 +37,7 @@ p_copy = pickle.loads(pickle.dumps(p)) # creates a copy of index p using pickle 
 print(f"Parameters passed to constructor:  space={p_copy.space}, dim={p_copy.dim}") 
 print(f"Index construction: M={p_copy.M}, ef_construction={p_copy.ef_construction}")
 print(f"Index size is {p_copy.element_count} and index capacity is {p_copy.max_elements}")
-print(f"Search speed/quality trade-off parameter: ef={p_copy.ef}")
+print(f"Search speed/quality trade-off parameter: ef={p_copy_search_default}")
 ```
 
 An example with updates after serialization/deserialization:
