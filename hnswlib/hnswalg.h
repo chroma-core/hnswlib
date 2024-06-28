@@ -1725,11 +1725,11 @@ namespace hnswlib
         searchKnn(const void *query_data, size_t k, BaseFilterFunctor *isIdAllowed = nullptr, const std::optional<size_t> ef_search = std::nullopt) const
         {
 
-            size_t get_ef_search_default()
+            auto get_ef_search_default = [this]()
             {
                 std::shared_lock<std::shared_mutex> lock(ef_search_default_lock_);
                 return ef_search_default_;
-            }
+            };
 
             const std::size_t this_ef_search = ef_search.has_value() ? ef_search.value() : get_ef_search_default();
             std::priority_queue<std::pair<dist_t, labeltype>>
