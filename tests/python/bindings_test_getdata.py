@@ -16,9 +16,11 @@ class RandomSelfTestCase(unittest.TestCase):
         data = np.float32(np.random.random((num_elements, dim)))
         labels = np.arange(0, num_elements)
 
-        for space in ['l2', 'ip', 'cosine']:
+        for space in ["l2", "ip", "cosine"]:
             # Declaring index
-            p = hnswlib.Index(space=space, dim=dim)  # possible options are l2, cosine or ip
+            p = hnswlib.Index(
+                space=space, dim=dim
+            )  # possible options are l2, cosine or ip
 
             # Initiating index
             # max_elements - the maximum number of elements, should be known beforehand
