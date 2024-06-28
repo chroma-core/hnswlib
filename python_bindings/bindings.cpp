@@ -8,6 +8,7 @@
 #include <atomic>
 #include <stdlib.h>
 #include <assert.h>
+#include <optional>
 
 namespace py = pybind11;
 using namespace pybind11::literals; // needed to bring in _a literal
