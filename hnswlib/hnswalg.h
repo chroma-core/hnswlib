@@ -10,6 +10,7 @@
 #include <set>
 #include <list>
 #include <shared_mutex>
+#include <optional>
 
 namespace hnswlib
 {
@@ -45,7 +46,7 @@ namespace hnswlib
 
         std::mutex global;
         std::vector<std::mutex> link_list_locks_;
-        std::shared_mutex ef_search_default_lock_;
+        mutable std::shared_mutex ef_search_default_lock_;
 
         tableint enterpoint_node_{0};
 
@@ -1723,13 +1724,14 @@ namespace hnswlib
         std::priority_queue<std::pair<dist_t, labeltype>>
         searchKnn(const void *query_data, size_t k, BaseFilterFunctor *isIdAllowed = nullptr, const std::optional<size_t> ef_search = std::nullopt) const
         {
-            if !ef_search
-                .has_value()
-                {
-                    std::shared_lock<std::shared_mutex> lock(ef_search_default_lock_);
-                    ef_search = ef_search_default_;
-                }
 
+            size_t get_ef_search_default()
+            {
+                std::shared_lock<std::shared_mutex> lock(ef_search_default_lock_);
+                return ef_search_default_;
+            }
+
+            const std::size_t this_ef_search = ef_search.has_value() ? ef_search.value() : get_ef_search_default();
             std::priority_queue<std::pair<dist_t, labeltype>>
                 result;
             if (cur_element_count == 0)
@@ -1772,12 +1774,12 @@ namespace hnswlib
             if (num_deleted_)
             {
                 top_candidates = searchBaseLayerST<true, true>(
-                    currObj, query_data, std::max(ef_search, k), isIdAllowed);
+                    currObj, query_data, std::max(this_ef_search, k), isIdAllowed);
             }
             else
             {
                 top_candidates = searchBaseLayerST<false, true>(
-                    currObj, query_data, std::max(ef_search, k), isIdAllowed);
+                    currObj, query_data, std::max(this_ef_search, k), isIdAllowed);
             }
 
             while (top_candidates.size() > k)
