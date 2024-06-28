@@ -34,7 +34,7 @@ namespace
         }
 
         hnswlib::InnerProductSpace space(d);
-        hnswlib::HierarchicalNSW<float> *alg_hnsw = new hnswlib::HierarchicalNSW<float>(&space, 2 * n, 16, 200, 100, false, false, true, ".");
+        hnswlib::HierarchicalNSW<float> *alg_hnsw = new hnswlib::HierarchicalNSW<float>(&space, 2 * n, 16, 200, 10, 100, false, false, true, ".");
 
         for (size_t i = 0; i < n; i++)
         {
@@ -105,7 +105,7 @@ namespace
         }
 
         hnswlib::InnerProductSpace space(d);
-        hnswlib::HierarchicalNSW<float> *alg_hnsw = new hnswlib::HierarchicalNSW<float>(&space, n / 4, 16, 200, 100, false, false, true, ".");
+        hnswlib::HierarchicalNSW<float> *alg_hnsw = new hnswlib::HierarchicalNSW<float>(&space, n / 4, 16, 200, 10, 100, false, false, true, ".");
 
         // Add a quarter of the data
         for (size_t i = 0; i < n / 4; i++)
@@ -189,7 +189,7 @@ namespace
         }
 
         hnswlib::InnerProductSpace space(d);
-        hnswlib::HierarchicalNSW<float> *alg_hnsw = new hnswlib::HierarchicalNSW<float>(&space, n, 16, 200, 100, false, false, true, ".");
+        hnswlib::HierarchicalNSW<float> *alg_hnsw = new hnswlib::HierarchicalNSW<float>(&space, n, 16, 200, 10, 100, false, false, true, ".");
 
         for (size_t i = 0; i < n; i++)
         {
@@ -256,7 +256,7 @@ namespace
         }
 
         hnswlib::InnerProductSpace space(d);
-        hnswlib::HierarchicalNSW<float> *alg_hnsw = new hnswlib::HierarchicalNSW<float>(&space, n, 16, 200, 100, false, false, true, ".");
+        hnswlib::HierarchicalNSW<float> *alg_hnsw = new hnswlib::HierarchicalNSW<float>(&space, n, 16, 200, 10, 100, false, false, true, ".");
 
         for (size_t i = 0; i < n; i++)
         {

@@ -24,7 +24,7 @@ p.init_index(max_elements=num_elements, ef_construction=200, M=16)
 p.add_items(data, ids)
 
 # Controlling the recall by setting ef:
-p.set_ef(50)  # ef should always be > k
+p.set_ef_search_default(50)  # ef should always be > k
 
 # Query dataset, k - number of the closest elements (returns 2 numpy arrays)
 labels, distances = p.knn_query(data, k=1)
@@ -42,4 +42,4 @@ print(f"Index construction: M={p_copy.M}, ef_construction={p_copy.ef_constructio
 print(
     f"Index size is {p_copy.element_count} and index capacity is {p_copy.max_elements}"
 )
-print(f"Search speed/quality trade-off parameter: ef={p_copy.ef}")
+print(f"Search speed/quality trade-off parameter: ef={p_copy.ef_search_default}")

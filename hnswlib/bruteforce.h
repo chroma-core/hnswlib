@@ -103,7 +103,7 @@ namespace hnswlib
         }
 
         std::priority_queue<std::pair<dist_t, labeltype>>
-        searchKnn(const void *query_data, size_t k, BaseFilterFunctor *isIdAllowed = nullptr) const
+        searchKnn(const void *query_data, size_t k, BaseFilterFunctor *isIdAllowed = nullptr, const std::optional<size_t> ef_search = std::nullopt) const
         {
             assert(k <= cur_element_count);
             std::priority_queue<std::pair<dist_t, labeltype>> topResults;

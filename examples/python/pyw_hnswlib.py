@@ -42,8 +42,8 @@ class Index:
                 start += 1
         self.index.add_items(data=data, ids=np.asarray(int_labels))
 
-    def set_ef(self, ef):
-        self.index.set_ef(ef)
+    def set_ef_search_default(self, ef):
+        self.index.set_ef_search_default(ef)
 
     def load_index(self, path):
         self.index.load_index(path)

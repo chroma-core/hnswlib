@@ -35,7 +35,7 @@ p.init_index(max_elements=num_elements // 2, ef_construction=100, M=16)
 
 # Controlling the recall by setting ef:
 # higher ef leads to better accuracy, but slower search
-p.set_ef(10)
+p.set_ef_search_default(10)
 
 # Set number of threads used during batch search/construction
 # By default using all available cores

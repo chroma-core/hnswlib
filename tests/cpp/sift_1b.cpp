@@ -39,6 +39,9 @@ public:
  */
 
 #if defined(_WIN32)
+#define NOMINMAX
+#define WIN32_LEAN_AND_MEAN
+#define _ENABLE_EXTENDED_ALIGNED_STORAGE
 #include <windows.h>
 #include <psapi.h>
 
@@ -237,7 +240,7 @@ test_vs_recall(
     }
     for (size_t ef : efs)
     {
-        appr_alg.setEf(ef);
+        appr_alg.setEfSearchDefault(ef);
         StopW stopw = StopW();
 
         float recall = test_approx(massQ, vecsize, qsize, appr_alg, vecdim, answers, k);

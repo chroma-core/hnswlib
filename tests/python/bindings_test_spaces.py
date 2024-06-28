@@ -36,7 +36,7 @@ class RandomSelfTestCase(unittest.TestCase):
                     p = hnswlib.Index(space=space, dim=dim)
                     p.init_index(max_elements=5, ef_construction=100, M=16)
 
-                    p.set_ef(10)
+                    p.set_ef_search_default(10)
 
                     p.add_items(data2)
 

@@ -51,7 +51,7 @@ class RandomSelfTestCase(unittest.TestCase):
             allow_replace_deleted=True,
         )
 
-        hnsw_index.set_ef(100)
+        hnsw_index.set_ef_search_default(100)
         hnsw_index.set_num_threads(4)
 
         # Add batch 1 and 2
@@ -213,9 +213,9 @@ class RandomSelfTestCase(unittest.TestCase):
         bf_index = hnswlib.BFIndex(space="l2", dim=dim)
         bf_index.init_index(max_elements=max_num_elements)
 
-        hnsw_index_no_replace.set_ef(100)
+        hnsw_index_no_replace.set_ef_search_default(100)
         hnsw_index_no_replace.set_num_threads(50)
-        hnsw_index_with_replace.set_ef(100)
+        hnsw_index_with_replace.set_ef_search_default(100)
         hnsw_index_with_replace.set_num_threads(50)
 
         # Add data

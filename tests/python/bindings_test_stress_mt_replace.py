@@ -38,7 +38,7 @@ class RandomSelfTestCase(unittest.TestCase):
                 allow_replace_deleted=True,
             )
 
-            hnsw_index.set_ef(100)
+            hnsw_index.set_ef_search_default(100)
             hnsw_index.set_num_threads(50)
 
             # Add batch 1 and 2

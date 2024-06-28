@@ -8,6 +8,7 @@
 #include <atomic>
 #include <stdlib.h>
 #include <assert.h>
+#include <optional>
 
 namespace py = pybind11;
 using namespace pybind11::literals; // needed to bring in _a literal
@@ -173,7 +174,7 @@ public:
     std::string space_name;
     int dim;
     size_t seed;
-    size_t default_ef;
+    size_t ef_search_default;
 
     bool index_inited;
     bool ep_added;
@@ -207,8 +208,6 @@ public:
         ep_added = true;
         index_inited = false;
         num_threads_default = std::thread::hardware_concurrency();
-
-        default_ef = 10;
     }
 
     ~Index()
@@ -222,6 +221,7 @@ public:
         size_t maxElements,
         size_t M,
         size_t efConstruction,
+        size_t efSearchDefault,
         size_t random_seed,
         bool allow_replace_deleted,
         bool is_persistent_index,
@@ -232,18 +232,19 @@ public:
             throw std::runtime_error("The index is already initiated.");
         }
         cur_l = 0;
-        appr_alg = new hnswlib::HierarchicalNSW<dist_t>(l2space, maxElements, M, efConstruction, random_seed, allow_replace_deleted, normalize, is_persistent_index, persistence_location);
+        appr_alg = new hnswlib::HierarchicalNSW<dist_t>(l2space, maxElements, M, efConstruction, efSearchDefault, random_seed, allow_replace_deleted, normalize, is_persistent_index, persistence_location);
         index_inited = true;
         ep_added = false;
-        appr_alg->ef_ = default_ef;
+        ef_search_default = efSearchDefault;
+        appr_alg->ef_search_default_ = efSearchDefault;
         seed = random_seed;
     }
 
-    void set_ef(size_t ef)
+    void set_ef_search_default(size_t ef_search_default)
     {
-        default_ef = ef;
+        ef_search_default = ef_search_default;
         if (appr_alg)
-            appr_alg->ef_ = ef;
+            appr_alg->ef_search_default_ = ef_search_default;
     }
 
     void set_num_threads(int num_threads)
@@ -456,7 +457,7 @@ public:
             "M"_a = appr_alg->M_,
             "mult"_a = appr_alg->mult_,
             "ef_construction"_a = appr_alg->ef_construction_,
-            "ef"_a = appr_alg->ef_,
+            "ef_search_default"_a = appr_alg->ef_search_default_,
             "has_deletions"_a = (bool)appr_alg->num_deleted_,
             "size_links_per_element"_a = appr_alg->size_links_per_element_,
             "allow_replace_deleted"_a = appr_alg->allow_replace_deleted_,
@@ -506,7 +507,7 @@ public:
             "seed"_a = seed);
 
         if (index_inited == false)
-            return py::dict(**params, "ef"_a = default_ef);
+            return py::dict(**params, "ef_search_default"_a = ef_search_default);
 
         auto ann_params = getAnnData();
 
@@ -535,6 +536,7 @@ public:
                 d["max_elements"].cast<size_t>(),
                 d["M"].cast<size_t>(),
                 d["ef_construction"].cast<size_t>(),
+                d["ef_search_default"].cast<size_t>(),
                 new_index->seed);
             new_index->cur_l = d["cur_element_count"].cast<size_t>();
         }
@@ -542,7 +544,7 @@ public:
         new_index->index_inited = index_inited_;
         new_index->ep_added = d["ep_added"].cast<bool>();
         new_index->num_threads_default = d["num_threads"].cast<int>();
-        new_index->default_ef = d["ef"].cast<size_t>();
+        new_index->ef_search_default = d["ef_search_default"].cast<size_t>();
 
         if (index_inited_)
             new_index->setAnnData(d);
@@ -577,7 +579,7 @@ public:
         assert_true(appr_alg->mult_ == d["mult"].cast<double>(), "Invalid value of mult_ ");
         assert_true(appr_alg->ef_construction_ == d["ef_construction"].cast<size_t>(), "Invalid value of ef_construction_ ");
 
-        appr_alg->ef_ = d["ef"].cast<size_t>();
+        assert_true(appr_alg->ef_search_default_ = d["ef_search_default"].cast<size_t>(), "Invalid value of ef_search_default_ ");
 
         assert_true(appr_alg->size_links_per_element_ == d["size_links_per_element"].cast<size_t>(), "Invalid value of size_links_per_element_ ");
 
@@ -665,7 +667,8 @@ public:
         py::object input,
         size_t k = 1,
         int num_threads = -1,
-        const std::function<bool(hnswlib::labeltype)> &filter = nullptr)
+        const std::function<bool(hnswlib::labeltype)> &filter = nullptr,
+        const std::optional<size_t> ef_search = std::nullopt)
     {
         py::array_t<dist_t, py::array::c_style | py::array::forcecast> items(input);
         auto buffer = items.request();
@@ -701,7 +704,7 @@ public:
                         (void*)items.data(row), k, p_idFilter);
                     if (result.size() != k)
                         throw std::runtime_error(
-                            "Cannot return the results in a contigious 2D array. Probably ef or M is too small");
+                            "Cannot return the results in a contigious 2D array. Probably ef_search_default or M is too small");
                     for (int i = k - 1; i >= 0; i--) {
                         auto& result_tuple = result.top();
                         data_numpy_d[row * k + i] = result_tuple.first;
@@ -723,7 +726,7 @@ public:
                         (void*)(norm_array.data() + start_idx), k, p_idFilter);
                     if (result.size() != k)
                         throw std::runtime_error(
-                            "Cannot return the results in a contigious 2D array. Probably ef or M is too small");
+                            "Cannot return the results in a contigious 2D array. Probably ef_search_default or M is too small");
                     for (int i = k - 1; i >= 0; i--) {
                         auto& result_tuple = result.top();
                         data_numpy_d[row * k + i] = result_tuple.first;
@@ -900,7 +903,8 @@ public:
     py::object knnQuery_return_numpy(
         py::object input,
         size_t k = 1,
-        const std::function<bool(hnswlib::labeltype)> &filter = nullptr)
+        const std::function<bool(hnswlib::labeltype)> &filter = nullptr,
+        const std::optional<size_t> ef_search = std::nullopt)
     {
         py::array_t<dist_t, py::array::c_style | py::array::forcecast> items(input);
         auto buffer = items.request();
@@ -921,7 +925,7 @@ public:
             for (size_t row = 0; row < rows; row++)
             {
                 std::priority_queue<std::pair<dist_t, hnswlib::labeltype>> result = alg->searchKnn(
-                    (void *)items.data(row), k, p_idFilter);
+                    (void *)items.data(row), k, p_idFilter, ef_search);
                 for (int i = k - 1; i >= 0; i--)
                 {
                     auto &result_tuple = result.top();
@@ -966,6 +970,7 @@ PYBIND11_PLUGIN(hnswlib)
              py::arg("max_elements"),
              py::arg("M") = 16,
              py::arg("ef_construction") = 200,
+             py::arg("ef_search_default") = 10,
              py::arg("random_seed") = 100,
              py::arg("allow_replace_deleted") = false,
              py::arg("is_persistent_index") = false,
@@ -975,7 +980,8 @@ PYBIND11_PLUGIN(hnswlib)
              py::arg("data"),
              py::arg("k") = 1,
              py::arg("num_threads") = -1,
-             py::arg("filter") = py::none())
+             py::arg("filter") = py::none(),
+             py::arg("ef_search") = py::none())
         .def("add_items",
              &Index<float>::addItems,
              py::arg("data"),
@@ -984,7 +990,7 @@ PYBIND11_PLUGIN(hnswlib)
              py::arg("replace_deleted") = false)
         .def("get_items", &Index<float, float>::getDataReturnList, py::arg("ids") = py::none())
         .def("get_ids_list", &Index<float>::getIdsList)
-        .def("set_ef", &Index<float>::set_ef, py::arg("ef"))
+        .def("set_ef_search_default", &Index<float>::set_ef_search_default, py::arg("ef_search_default"))
         .def("set_num_threads", &Index<float>::set_num_threads, py::arg("num_threads"))
         .def("save_index", &Index<float>::saveIndex, py::arg("path_to_index"))
         .def("load_index",
@@ -1004,12 +1010,12 @@ PYBIND11_PLUGIN(hnswlib)
         .def_readonly("space", &Index<float>::space_name)
         .def_readonly("dim", &Index<float>::dim)
         .def_readwrite("num_threads", &Index<float>::num_threads_default)
-        .def_property("ef", [](const Index<float> &index)
-                      { return index.index_inited ? index.appr_alg->ef_ : index.default_ef; }, [](Index<float> &index, const size_t ef_)
+        .def_property("ef_search_default", [](const Index<float> &index)
+                      { return index.index_inited ? index.appr_alg->ef_search_default_ : index.ef_search_default; }, [](Index<float> &index, const size_t ef_search_default_)
                       {
-            index.default_ef = ef_;
+            index.ef_search_default = ef_search_default_;
             if (index.appr_alg)
-              index.appr_alg->ef_ = ef_; })
+              index.appr_alg->ef_search_default_ = ef_search_default_; })
         .def_property_readonly("max_elements", [](const Index<float> &index)
                                { return index.index_inited ? index.appr_alg->max_elements_ : 0; })
         .def_property_readonly("element_count", [](const Index<float> &index)
@@ -1036,7 +1042,7 @@ PYBIND11_PLUGIN(hnswlib)
     py::class_<BFIndex<float>>(m, "BFIndex")
         .def(py::init<const std::string &, const int>(), py::arg("space"), py::arg("dim"))
         .def("init_index", &BFIndex<float>::init_new_index, py::arg("max_elements"))
-        .def("knn_query", &BFIndex<float>::knnQuery_return_numpy, py::arg("data"), py::arg("k") = 1, py::arg("filter") = py::none())
+        .def("knn_query", &BFIndex<float>::knnQuery_return_numpy, py::arg("data"), py::arg("k") = 1, py::arg("filter") = py::none(), py::arg("ef_search") = py::none())
         .def("add_items", &BFIndex<float>::addItems, py::arg("data"), py::arg("ids") = py::none())
         .def("delete_vector", &BFIndex<float>::deleteVector, py::arg("label"))
         .def("save_index", &BFIndex<float>::saveIndex, py::arg("path_to_index"))

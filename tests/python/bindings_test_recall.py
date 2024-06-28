@@ -38,7 +38,7 @@ class RandomSelfTestCase(unittest.TestCase):
 
         # Controlling the recall for hnsw by setting ef:
         # higher ef leads to better accuracy, but slower search
-        hnsw_index.set_ef(200)
+        hnsw_index.set_ef_search_default(200)
 
         # Set number of threads used during batch search/construction in hnsw
         # By default using all available cores

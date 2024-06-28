@@ -69,17 +69,18 @@ inline void ParallelFor(size_t start, size_t end, size_t numThreads, Function fn
 
 int main()
 {
-    int dim = 16;              // Dimension of the elements
-    int max_elements = 10000;  // Maximum number of elements, should be known beforehand
-    int M = 16;                // Tightly connected with internal dimensionality of the data
-                               // strongly affects the memory consumption
-    int ef_construction = 200; // Controls index search speed/build speed tradeoff
-    int num_threads = 20;      // Number of threads for operations with index
+    int dim = 16;               // Dimension of the elements
+    int max_elements = 10000;   // Maximum number of elements, should be known beforehand
+    int M = 16;                 // Tightly connected with internal dimensionality of the data
+                                // strongly affects the memory consumption
+    int ef_construction = 200;  // Controls index search speed/build speed tradeoff
+    int ef_search_default = 10; // Controls index search speed/recall tradeoff
+    int num_threads = 20;       // Number of threads for operations with index
 
     // Initing index with allow_replace_deleted=true
     int seed = 100;
     hnswlib::L2Space space(dim);
-    hnswlib::HierarchicalNSW<float> *alg_hnsw = new hnswlib::HierarchicalNSW<float>(&space, max_elements, M, ef_construction, seed, true);
+    hnswlib::HierarchicalNSW<float> *alg_hnsw = new hnswlib::HierarchicalNSW<float>(&space, max_elements, M, ef_construction, ef_search_default, seed, true);
 
     // Generate random data
     std::mt19937 rng;

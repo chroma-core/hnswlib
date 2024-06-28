@@ -8,7 +8,7 @@ import setuptools
 from setuptools import Extension, setup
 from setuptools.command.build_ext import build_ext
 
-__version__ = "0.7.4"
+__version__ = "0.7.5"
 
 include_dirs = [
     pybind11.get_include(),
@@ -59,9 +59,11 @@ def has_flag(compiler, flagname):
 
 
 def cpp_flag(compiler):
-    """Return the -std=c++[11/14] compiler flag.
-    The c++14 is prefered over c++11 (when it is available).
+    """Return the -std=c++[11/14/17] compiler flag.
+    The c++14 is prefered over c++17 (when it is available).
     """
+    if has_flag(compiler, "-std=c++17"):
+        return "-std=c++17"
     if has_flag(compiler, "-std=c++14"):
         return "-std=c++14"
     elif has_flag(compiler, "-std=c++11"):
@@ -91,8 +93,8 @@ class BuildExt(build_ext):
     if sys.platform == "darwin":
         if platform.machine() == "arm64":
             c_opts["unix"].remove("-march=native")
-        c_opts["unix"] += ["-stdlib=libc++", "-mmacosx-version-min=10.7"]
-        link_opts["unix"] += ["-stdlib=libc++", "-mmacosx-version-min=10.7"]
+        c_opts["unix"] += ["-stdlib=libc++", "-mmacosx-version-min=10.13"]
+        link_opts["unix"] += ["-stdlib=libc++", "-mmacosx-version-min=10.13"]
     else:
         c_opts["unix"].append("-fopenmp")
         link_opts["unix"].extend(["-fopenmp", "-pthread"])
@@ -107,6 +109,7 @@ class BuildExt(build_ext):
                 opts.append("-fvisibility=hidden")
         elif ct == "msvc":
             opts.append('/DVERSION_INFO=\\"%s\\"' % self.distribution.get_version())
+            opts.append("/std:c++latest")
 
         for ext in self.extensions:
             ext.extra_compile_args.extend(opts)

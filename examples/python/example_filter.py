@@ -27,7 +27,7 @@ hnsw_index.init_index(max_elements=num_elements, ef_construction=100, M=16)
 
 # Controlling the recall by setting ef:
 # higher ef leads to better accuracy, but slower search
-hnsw_index.set_ef(10)
+hnsw_index.set_ef_search_default(10)
 
 # Set number of threads used during batch search/construction
 # By default using all available cores
