@@ -7,7 +7,6 @@ import hnswlib
 
 class RandomSelfTestCase(unittest.TestCase):
     def testMetadata(self):
-
         dim = 16
         num_elements = 10000
 
@@ -15,7 +14,7 @@ class RandomSelfTestCase(unittest.TestCase):
         data = np.float32(np.random.random((num_elements, dim)))
 
         # Declaring index
-        p = hnswlib.Index(space='l2', dim=dim)  # possible options are l2, cosine or ip
+        p = hnswlib.Index(space="l2", dim=dim)  # possible options are l2, cosine or ip
 
         # Initing index
         # max_elements - the maximum number of elements, should be known beforehand
@@ -41,7 +40,7 @@ class RandomSelfTestCase(unittest.TestCase):
         self.assertEqual(p.get_current_count(), num_elements)
 
         # test properties
-        self.assertEqual(p.space, 'l2')
+        self.assertEqual(p.space, "l2")
         self.assertEqual(p.dim, dim)
         self.assertEqual(p.M, 16)
         self.assertEqual(p.ef_construction, 100)

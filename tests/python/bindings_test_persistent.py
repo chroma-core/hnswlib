@@ -16,13 +16,19 @@ class RandomSelfTestCase(unittest.TestCase):
         labels = np.arange(0, num_elements)
 
         # Declaring index
-        p = hnswlib.Index(space='l2', dim=dim)
+        p = hnswlib.Index(space="l2", dim=dim)
 
         # Initiating index
         # Make test dir if it doesn't exist
         if not os.path.exists("test_dir"):
             os.makedirs("test_dir")
-        p.init_index(max_elements=num_elements, ef_construction=100, M=16, is_persistent_index=True, persistence_location="test_dir")
+        p.init_index(
+            max_elements=num_elements,
+            ef_construction=100,
+            M=16,
+            is_persistent_index=True,
+            persistence_location="test_dir",
+        )
         p.set_num_threads(4)
 
         print("Adding all elements (%d)" % (len(data)))
@@ -30,7 +36,7 @@ class RandomSelfTestCase(unittest.TestCase):
         p.persist_dirty()
 
         # Load a persisted index
-        p2 = hnswlib.Index(space='l2', dim=dim)
+        p2 = hnswlib.Index(space="l2", dim=dim)
         p2.load_index("test_dir", is_persistent_index=True)
         returned_items = p2.get_items(labels)
         self.assertTrue(np.allclose(data, returned_items, atol=1e-6))
