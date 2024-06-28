@@ -579,7 +579,7 @@ public:
         assert_true(appr_alg->mult_ == d["mult"].cast<double>(), "Invalid value of mult_ ");
         assert_true(appr_alg->ef_construction_ == d["ef_construction"].cast<size_t>(), "Invalid value of ef_construction_ ");
 
-        appr_alg->ef_search_default_ = d["ef_search_default"].cast<size_t>();
+        assert_true(appr_alg->ef_search_default_ = d["ef_search_default"].cast<size_t>(), "Invalid value of ef_search_default_ ");
 
         assert_true(appr_alg->size_links_per_element_ == d["size_links_per_element"].cast<size_t>(), "Invalid value of size_links_per_element_ ");
 

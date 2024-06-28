@@ -39,6 +39,9 @@ public:
  */
 
 #if defined(_WIN32)
+#define NOMINMAX
+#define WIN32_LEAN_AND_MEAN
+#define _ENABLE_EXTENDED_ALIGNED_STORAGE
 #include <windows.h>
 #include <psapi.h>
 
@@ -235,7 +238,8 @@ test_vs_recall(
     {
         efs.push_back(i);
     }
-    for (size_t ef : efs) {
+    for (size_t ef : efs)
+    {
         appr_alg.setEfSearchDefault(ef);
         StopW stopw = StopW();
 
