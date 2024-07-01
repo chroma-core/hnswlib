@@ -90,7 +90,8 @@ class BuildExt(build_ext):
 
     if sys.platform == "darwin":
         if platform.machine() == "arm64":
-            c_opts["unix"].remove("-march=native")
+            if "-march=native" in c_opts["unix"]:
+                c_opts["unix"].remove("-march=native")
         c_opts["unix"] += ["-stdlib=libc++", "-mmacosx-version-min=10.7"]
         link_opts["unix"] += ["-stdlib=libc++", "-mmacosx-version-min=10.7"]
     else:
