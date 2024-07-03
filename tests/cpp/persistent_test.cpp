@@ -66,14 +66,11 @@ namespace
         {
             const void *p = query.data() + j * d;
             auto gd = alg_hnsw->searchKnn(p, k);
-            std::cout << "gd.size(): " << gd.size() << std::endl;
             auto res = alg_hnsw2->searchKnn(p, k);
-            std::cout << "res.size(): " << res.size() << std::endl;
             assert(gd.size() == res.size());
             int missed = 0;
             for (size_t i = 0; i < gd.size(); i++)
             {
-                std::cout << "gd.top().first: " << gd.top().first << " res.top().first: " << res.top().first << std::endl;
                 assert(std::abs(gd.top().first - res.top().first) < 1e-6);
                 assert(gd.top().second == res.top().second);
                 gd.pop();
@@ -388,14 +385,11 @@ void test_persist_size(int n) {
     {
         const void *p = query.data() + j * d;
         auto gd = alg_hnsw->searchKnn(p, k);
-        std::cout << "gd.size(): " << gd.size() << std::endl;
         auto res = alg_hnsw2->searchKnn(p, k);
-        std::cout << "res.size(): " << res.size() << std::endl;
         assert(gd.size() == res.size());
         int missed = 0;
         for (size_t i = 0; i < gd.size(); i++)
         {
-            std::cout << "gd.top().first: " << gd.top().first << " res.top().first: " << res.top().first << std::endl;
             assert(std::abs(gd.top().first - res.top().first) < 1e-6);
             assert(gd.top().second == res.top().second);
             gd.pop();
@@ -518,14 +512,11 @@ void test_persist_size_then_add(int n, int second_n) {
     {
         const void *p = query.data() + j * d;
         auto gd = alg_hnsw2->searchKnn(p, k);
-        std::cout << "gd.size(): " << gd.size() << std::endl;
         auto res = alg_hnsw3->searchKnn(p, k);
-        std::cout << "res.size(): " << res.size() << std::endl;
         assert(gd.size() == res.size());
         int missed = 0;
         for (size_t i = 0; i < gd.size(); i++)
         {
-            std::cout << "gd.top().first: " << gd.top().first << " res.top().first: " << res.top().first << std::endl;
             assert(std::abs(gd.top().first - res.top().first) < 1e-6);
             assert(gd.top().second == res.top().second);
             gd.pop();
