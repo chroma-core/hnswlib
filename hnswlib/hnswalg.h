@@ -909,6 +909,8 @@ namespace hnswlib
         // Persistence functions
         void persistDirty()
         {
+            std::cout << "persistDirty" << std::endl;
+            std::cout << "len of elements_to_persist_: " << elements_to_persist_.size() << std::endl;
             if (elements_to_persist_.size() == 0)
             {
                 return;
@@ -1703,6 +1705,9 @@ namespace hnswlib
                 // Do nothing for the first element
                 enterpoint_node_ = 0;
                 maxlevel_ = curlevel;
+
+                // mark cur_c as dirty
+                markElementToPersist(cur_c);
             }
 
             // Releasing lock for the maximum level
