@@ -1703,6 +1703,9 @@ namespace hnswlib
                 // Do nothing for the first element
                 enterpoint_node_ = 0;
                 maxlevel_ = curlevel;
+
+                // mark cur_c as dirty
+                markElementToPersist(cur_c);
             }
 
             // Releasing lock for the maximum level
