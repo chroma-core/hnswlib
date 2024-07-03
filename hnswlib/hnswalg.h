@@ -909,8 +909,6 @@ namespace hnswlib
         // Persistence functions
         void persistDirty()
         {
-            std::cout << "persistDirty" << std::endl;
-            std::cout << "len of elements_to_persist_: " << elements_to_persist_.size() << std::endl;
             if (elements_to_persist_.size() == 0)
             {
                 return;
