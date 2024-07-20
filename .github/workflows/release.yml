@@ -29,7 +29,6 @@ jobs:
       - name: Build wheels
         run: python -m cibuildwheel --output-dir dist
         env:
-          CIBW_ENVIRONMENT: HNSWLIB_NO_NATIVE=true
           CIBW_ENVIRONMENT_PASS_LINUX: HNSWLIB_NO_NATIVE
           CIBW_PROJECT_REQUIRES_PYTHON: ">=3.7"
           CIBW_SKIP: "pp* *musllinux*"
@@ -37,7 +36,7 @@ jobs:
           CIBW_ARCHS_WINDOWS: "AMD64"
           CIBW_ARCHS_LINUX: "x86_64 aarch64"
           CIBW_BUILD_VERBOSITY: "3"
-          CIBW_ENVIRONMENT: "CFLAGS='-v' CXXFLAGS='-v' LDFLAGS='-v'"
+          CIBW_ENVIRONMENT: "CFLAGS='-v' CXXFLAGS='-v' LDFLAGS='-v' HNSWLIB_NO_NATIVE=true"
       - name: Upload artifacts
         uses: actions/upload-artifact@v3
         with:
