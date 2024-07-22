@@ -8,7 +8,7 @@ import setuptools
 from setuptools import Extension, setup
 from setuptools.command.build_ext import build_ext
 
-__version__ = "0.7.6.alpha9"
+__version__ = "0.7.5"
 
 include_dirs = [
     pybind11.get_include(),
@@ -76,7 +76,7 @@ class BuildExt(build_ext):
     """A custom build extension for adding compiler-specific options."""
 
     c_opts = {
-        "msvc": ["/EHsc", "/O2"],
+        "msvc": ["/EHsc", "/openmp", "/O2"],
         #'unix': ['-O3', '-march=native'],  # , '-w'
         "unix": ["-O3"],  # , '-w'
     }
