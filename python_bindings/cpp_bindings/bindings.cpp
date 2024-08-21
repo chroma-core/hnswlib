@@ -952,9 +952,9 @@ public:
     }
 };
 
-PYBIND11_PLUGIN(hnswlib)
+PYBIND11_PLUGIN(cpp_bindings)
 {
-    py::module m("hnswlib");
+    py::module m("cpp_bindings");
 
     py::class_<Index<float>>(m, "Index")
         .def(py::init(&Index<float>::createFromParams), py::arg("params"))
