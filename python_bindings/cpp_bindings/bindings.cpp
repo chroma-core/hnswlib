@@ -9,9 +9,6 @@
 #include <stdlib.h>
 #include <assert.h>
 
-#include <csignal>
-#include <stdexcept>
-
 namespace py = pybind11;
 using namespace pybind11::literals; // needed to bring in _a literal
 
@@ -955,31 +952,10 @@ public:
     }
 };
 
-void raise_signal(int signal_number)
-{
-    if (std::raise(signal_number) != 0)
-    {
-        throw std::runtime_error("Failed to raise signal");
-    }
-}
-
-// Example function to raise SIGSEGV
-void raise_segv()
-{
-    raise_signal(SIGSEGV);
-}
-
-// Example function to raise SIGABRT
-void raise_abort()
-{
-    raise_signal(SIGABRT);
-}
-
 PYBIND11_PLUGIN(cpp_bindings)
 {
     py::module m("cpp_bindings");
-    m.def("raise_segv", &raise_segv);
-    m.def("raise_abort", &raise_abort);
+
     py::class_<Index<float>>(m, "Index")
         .def(py::init(&Index<float>::createFromParams), py::arg("params"))
         /* WARNING: Index::createFromIndex is not thread-safe with Index::addItems */
