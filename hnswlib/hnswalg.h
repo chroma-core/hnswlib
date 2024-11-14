@@ -1728,8 +1728,15 @@ namespace hnswlib
             tableint currObj = enterpoint_node_;
             dist_t curdist = fstdistfunc_(query_data, getDataByInternalId(enterpoint_node_), dist_func_param_);
 
+            std::string trace = "[Error searching with max elements ";
+            trace += std::to_string(max_elements_);
+            trace += "]";
+
             for (int level = maxlevel_; level > 0; level--)
             {
+                trace += "\n=> [Enter Level ";
+                trace += std::to_string(level);
+                trace += "]";
                 bool changed = true;
                 while (changed)
                 {
@@ -1740,12 +1747,19 @@ namespace hnswlib
                     metric_hops++;
                     metric_distance_computations += size;
 
+                    trace += " -> [Linked list size: ";
+                    trace += std::to_string(size);
+                    trace += "]";
+
                     tableint *datal = (tableint *)(data + 1);
                     for (int i = 0; i < size; i++)
                     {
                         tableint cand = datal[i];
+                        trace += " -> [Visit candidate ";
+                        trace += std::to_string(cand);
+                        trace += "]";
                         if (cand < 0 || cand > max_elements_)
-                            throw std::runtime_error(std::string("CAND ERROR WHEN SEARCHING: ") + std::to_string(cand) + " <-> " + std::to_string(max_elements_));
+                            throw std::runtime_error(trace);
                         dist_t d = fstdistfunc_(query_data, getDataByInternalId(cand), dist_func_param_);
 
                         if (d < curdist)
