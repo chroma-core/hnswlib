@@ -10,6 +10,7 @@
 #include <set>
 #include <list>
 #include <string>
+#include <iostream>
 
 namespace hnswlib
 {
@@ -590,6 +591,7 @@ namespace hnswlib
                 {
                     throw std::runtime_error("The newly inserted element should have blank link list");
                 }
+                std::cout << "Candidate [" << cur_c << "] neighbour count [" << selectedNeighbors.size() << "] at level [" << level << "]" << std::endl;
                 setListCount(ll_cur, selectedNeighbors.size());
                 tableint *data = (tableint *)(ll_cur + 1);
                 for (size_t idx = 0; idx < selectedNeighbors.size(); idx++)
@@ -1669,7 +1671,7 @@ namespace hnswlib
                             {
                                 tableint cand = datal[i];
                                 if (cand < 0 || cand > max_elements_)
-                                    throw std::runtime_error(std::string("CAND ERROR WHEN ADDING: ") + std::to_string(cand) + " <-> " + std::to_string(max_elements_));
+                                    throw std::runtime_error("cand error");
                                 dist_t d = fstdistfunc_(normalized_vector, getDataByInternalId(cand), dist_func_param_);
                                 if (d < curdist)
                                 {
