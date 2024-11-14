@@ -1803,24 +1803,42 @@ namespace hnswlib
         {
             int connections_checked = 0;
             std::vector<int> inbound_connections_num(cur_element_count, 0);
+            std::string trace = "[Error validating ";
+            trace += std::to_string(cur_element_count);
+            trace += " elements]";
             for (int i = 0; i < cur_element_count; i++)
             {
+                trace += "\n=> [Validating element ";
+                trace += std::to_string(i);
+                trace += "]";
                 for (int l = 0; l <= element_levels_[i]; l++)
                 {
                     linklistsizeint *ll_cur = get_linklist_at_level(i, l);
                     int size = getListCount(ll_cur);
+                    trace += " ~> [Level ";
+                    trace += std::to_string(l);
+                    trace += "with expected size ";
+                    trace += std::to_string(size);
+                    trace += "]";
                     tableint *data = (tableint *)(ll_cur + 1);
                     std::unordered_set<tableint> s;
                     for (int j = 0; j < size; j++)
                     {
-                        assert(data[j] > 0);
-                        assert(data[j] < cur_element_count);
-                        assert(data[j] != i);
+                        trace += " -> [Neighbor ";
+                        trace += std::to_string(data[j]);
+                        trace += "]";
+                        if (data[j] < 0 || data[j] >= cur_element_count || data[j] == i)
+                            throw std::runtime_error(trace);
                         inbound_connections_num[data[j]]++;
                         s.insert(data[j]);
                         connections_checked++;
                     }
-                    assert(s.size() == size);
+                    if (s.size() != size) {
+                        trace += " -> [Level actual size ";
+                        trace += std::to_string(s.size());
+                        trace += "]";
+                        throw std::runtime_error(trace);
+                    }
                 }
             }
             if (cur_element_count > 1)
