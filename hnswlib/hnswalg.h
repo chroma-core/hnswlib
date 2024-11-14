@@ -9,7 +9,7 @@
 #include <unordered_set>
 #include <set>
 #include <list>
-#include <iostream>
+#include <string>
 
 namespace hnswlib
 {
@@ -1668,10 +1668,8 @@ namespace hnswlib
                             for (int i = 0; i < size; i++)
                             {
                                 tableint cand = datal[i];
-                                if (cand < 0 || cand > max_elements_) {
-                                    std::cout << "CAND ERROR WHEN ADDING: " << cand << " <-> " << max_elements_ << std::endl;
-                                    throw std::runtime_error("cand error");
-                                }
+                                if (cand < 0 || cand > max_elements_)
+                                    throw std::runtime_error(std::string("CAND ERROR WHEN ADDING: ") + std::to_string(cand) + " <-> " + std::to_string(max_elements_));
                                 dist_t d = fstdistfunc_(normalized_vector, getDataByInternalId(cand), dist_func_param_);
                                 if (d < curdist)
                                 {
@@ -1746,10 +1744,8 @@ namespace hnswlib
                     for (int i = 0; i < size; i++)
                     {
                         tableint cand = datal[i];
-                        if (cand < 0 || cand > max_elements_) {
-                            std::cout << "CAND ERROR WHEN ADDING: " << cand << " <-> " << max_elements_ << std::endl;
-                            throw std::runtime_error("cand error");
-                        }
+                        if (cand < 0 || cand > max_elements_)
+                            throw std::runtime_error(std::string("CAND ERROR WHEN SEARCHING: ") + std::to_string(cand) + " <-> " + std::to_string(max_elements_));
                         dist_t d = fstdistfunc_(query_data, getDataByInternalId(cand), dist_func_param_);
 
                         if (d < curdist)
