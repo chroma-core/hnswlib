@@ -9,6 +9,7 @@
 #include <unordered_set>
 #include <set>
 #include <list>
+#include <iostream>
 
 namespace hnswlib
 {
@@ -1667,8 +1668,10 @@ namespace hnswlib
                             for (int i = 0; i < size; i++)
                             {
                                 tableint cand = datal[i];
-                                if (cand < 0 || cand > max_elements_)
+                                if (cand < 0 || cand > max_elements_) {
+                                    std::cout << "CAND ERROR WHEN ADDING: " << cand << " <-> " << max_elements_ << std::endl;
                                     throw std::runtime_error("cand error");
+                                }
                                 dist_t d = fstdistfunc_(normalized_vector, getDataByInternalId(cand), dist_func_param_);
                                 if (d < curdist)
                                 {
@@ -1743,8 +1746,10 @@ namespace hnswlib
                     for (int i = 0; i < size; i++)
                     {
                         tableint cand = datal[i];
-                        if (cand < 0 || cand > max_elements_)
+                        if (cand < 0 || cand > max_elements_) {
+                            std::cout << "CAND ERROR WHEN ADDING: " << cand << " <-> " << max_elements_ << std::endl;
                             throw std::runtime_error("cand error");
+                        }
                         dist_t d = fstdistfunc_(query_data, getDataByInternalId(cand), dist_func_param_);
 
                         if (d < curdist)
