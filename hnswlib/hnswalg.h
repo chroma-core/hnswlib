@@ -733,6 +733,7 @@ namespace hnswlib
 
         void saveIndex(const std::string &location)
         {
+            std::cout << "Saving hnsw index parameters..."; 
             std::ofstream output(location, std::ios::binary);
             std::streampos position;
 
@@ -754,6 +755,7 @@ namespace hnswlib
             output.write(data_level0_memory_, cur_element_count * size_data_per_element_);
             output.write(length_memory_, cur_element_count * sizeof(float));
 
+            std::cout << "Number of elements to save: " << cur_element_count << std::endl; 
             for (size_t i = 0; i < cur_element_count; i++)
             {
                 unsigned int linkListSize = element_levels_[i] > 0 ? size_links_per_element_ * element_levels_[i] : 0;
