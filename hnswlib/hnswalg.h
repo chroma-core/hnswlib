@@ -757,6 +757,7 @@ namespace hnswlib
             for (size_t i = 0; i < cur_element_count; i++)
             {
                 unsigned int linkListSize = element_levels_[i] > 0 ? size_links_per_element_ * element_levels_[i] : 0;
+                std::cout << "Saving linklist for element " << i << " with size " << linkListSize << std::endl; 
                 writeBinaryPOD(output, linkListSize);
                 if (linkListSize)
                     output.write(linkLists_[i], linkListSize);
