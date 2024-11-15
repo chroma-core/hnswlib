@@ -1072,11 +1072,13 @@ namespace hnswlib
             element_levels_ = std::vector<int>(max_elements_);
             revSize_ = 1.0 / mult_;
             ef_ = 10;
+            std::cout << "Number of elements to load: " << cur_element_count << std::endl; 
             for (size_t i = 0; i < cur_element_count; i++)
             {
                 label_lookup_[getExternalLabel(i)] = i;
                 unsigned int linkListSize;
                 readBinaryPOD(input_link_list, linkListSize);
+                std::cout << "Element " << i << " has linklists with size " << linkListSize << std::endl; 
                 if (linkListSize == 0)
                 {
                     element_levels_[i] = 0;
@@ -1090,6 +1092,7 @@ namespace hnswlib
                         throw std::runtime_error("Not enough memory: loadIndex failed to allocate linklist");
                     input_link_list.read(linkLists_[i], linkListSize);
                 }
+                std::cout << "Element " << i << " exists up to " << element_levels_[i] << " levels" << std::endl; 
             }
         }
 
