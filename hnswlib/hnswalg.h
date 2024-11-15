@@ -733,7 +733,6 @@ namespace hnswlib
 
         void saveIndex(const std::string &location)
         {
-            std::cout << "Saving hnsw index parameters..."; 
             std::ofstream output(location, std::ios::binary);
             std::streampos position;
 
@@ -755,11 +754,9 @@ namespace hnswlib
             output.write(data_level0_memory_, cur_element_count * size_data_per_element_);
             output.write(length_memory_, cur_element_count * sizeof(float));
 
-            std::cout << "Number of elements to save: " << cur_element_count << std::endl; 
             for (size_t i = 0; i < cur_element_count; i++)
             {
                 unsigned int linkListSize = element_levels_[i] > 0 ? size_links_per_element_ * element_levels_[i] : 0;
-                std::cout << "Saving linklist for element " << i << " with size " << linkListSize << std::endl; 
                 writeBinaryPOD(output, linkListSize);
                 if (linkListSize)
                     output.write(linkLists_[i], linkListSize);
@@ -916,6 +913,7 @@ namespace hnswlib
         // Persistence functions
         void persistDirty()
         {
+            std::cout << "Number of elements to persist: " << elements_to_persist_.size() << std::endl; 
             if (elements_to_persist_.size() == 0)
             {
                 return;
@@ -963,8 +961,10 @@ namespace hnswlib
             for (size_t i = 0; i < cur_element_count && dirty_elements_iter != elements_to_persist_.end(); i++)
             {
                 unsigned int linkListSize = element_levels_[i] > 0 ? size_links_per_element_ * element_levels_[i] : 0;
+                std::cout << "Persist cursor at element " << i << " with size " << linkListSize << std::endl; 
                 if (i == *dirty_elements_iter)
                 {
+                    std::cout << "Persisting linklist for element " << i << " with size " << linkListSize << std::endl; 
                     writeBinaryPOD(this->output_link_lists_, linkListSize);
                     if (linkListSize)
                         this->output_link_lists_.write(linkLists_[i], linkListSize);
