@@ -1808,7 +1808,11 @@ namespace hnswlib
             std::vector<int> inbound_connections_num(cur_element_count, 0);
             std::string trace = "[Error validating ";
             trace += std::to_string(cur_element_count);
-            trace += " elements]";
+            trace += " elements with dimension ";
+            trace += std::to_string(data_size_ / sizeof(float));
+            trace += " and max_m ";
+            trace += std::to_string(maxM_);
+            trace += "]";
             for (int i = 0; i < cur_element_count; i++)
             {
                 trace += "\n=> [Validating element ";
