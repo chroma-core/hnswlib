@@ -591,7 +591,6 @@ namespace hnswlib
                 {
                     throw std::runtime_error("The newly inserted element should have blank link list");
                 }
-                std::cout << "Candidate [" << cur_c << "] neighbour count [" << selectedNeighbors.size() << "] at level [" << level << "]" << std::endl;
                 setListCount(ll_cur, selectedNeighbors.size());
                 tableint *data = (tableint *)(ll_cur + 1);
                 for (size_t idx = 0; idx < selectedNeighbors.size(); idx++)
@@ -626,6 +625,8 @@ namespace hnswlib
                     throw std::runtime_error("Trying to connect an element to itself");
                 if (level > element_levels_[selectedNeighbors[idx]])
                     throw std::runtime_error("Trying to make a link on a non-existent level");
+
+                std::cout << "Connect candidate [" << cur_c << "] with neighbor [" << selectedNeighbors[idx] << "] at level [" << level << "]" << std::endl;
 
                 tableint *data = (tableint *)(ll_other + 1);
 
@@ -1619,6 +1620,8 @@ namespace hnswlib
 
             element_levels_[cur_c] = curlevel;
 
+            std::cout << "Candidate [" << cur_c << "] has max level [" << curlevel << "]" << std::endl;
+
             std::unique_lock<std::mutex> templock(global);
             int maxlevelcopy = maxlevel_;
             if (curlevel <= maxlevelcopy)
@@ -1817,7 +1820,7 @@ namespace hnswlib
                     int size = getListCount(ll_cur);
                     trace += " ~> [Level ";
                     trace += std::to_string(l);
-                    trace += "with expected size ";
+                    trace += " with expected size ";
                     trace += std::to_string(size);
                     trace += "]";
                     tableint *data = (tableint *)(ll_cur + 1);
