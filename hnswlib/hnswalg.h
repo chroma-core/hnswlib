@@ -1181,6 +1181,45 @@ namespace hnswlib
             return;
         }
 
+        std::pair<size_t, size_t> getLabelCounts() const
+        {
+            size_t non_deleted_labels = 0;
+            size_t deleted_labels = 0;
+            std::unique_lock<std::mutex> label_lock(label_lookup_lock);
+            for (auto it = label_lookup_.begin(); it != label_lookup_.end(); ++it)
+            {
+                if (!isMarkedDeleted(it->second))
+                {
+                    non_deleted_labels += 1;
+                }
+                else
+                {
+                    deleted_labels += 1;
+                }
+            }
+            return std::make_pair(non_deleted_labels, deleted_labels);
+        }
+
+        // Get all labels, segregated by deleted and non deleted.
+        std::pair<std::vector<labeltype>, std::vector<labeltype>> getAllLabels() const
+        {
+            std::vector<labeltype> labels;
+            std::vector<labeltype> deleted_labels;
+            std::unique_lock<std::mutex> label_lock(label_lookup_lock);
+            for (auto it = label_lookup_.begin(); it != label_lookup_.end(); ++it)
+            {
+                if (!isMarkedDeleted(it->second))
+                {
+                    labels.push_back(it->first);
+                }
+                else
+                {
+                    deleted_labels.push_back(it->first);
+                }
+            }
+            return std::make_pair(labels, deleted_labels);
+        }
+
         template <typename data_t>
         std::vector<data_t> getDataByLabel(labeltype label) const
         {
