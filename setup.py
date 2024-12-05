@@ -13,16 +13,10 @@ __version__ = "0.7.6"
 include_dirs = [
     pybind11.get_include(),
     np.get_include(),
+    "./hnswlib",
 ]
 
-# compatibility when run in python_bindings
-bindings_dir = "python_bindings"
-if bindings_dir in os.path.basename(os.getcwd()):
-    source_files = ["./bindings.cpp"]
-    include_dirs.extend(["../hnswlib/"])
-else:
-    source_files = ["./python_bindings/bindings.cpp"]
-    include_dirs.extend(["./hnswlib/"])
+source_files = ["./python_bindings/cpp_bindings/bindings.cpp"]
 
 
 libraries = []
@@ -31,7 +25,7 @@ extra_objects = []
 
 ext_modules = [
     Extension(
-        "hnswlib",
+        "hnswlib.cpp_bindings",
         source_files,
         include_dirs=include_dirs,
         libraries=libraries,
@@ -127,4 +121,6 @@ setup(
     install_requires=["numpy"],
     cmdclass={"build_ext": BuildExt},
     zip_safe=False,
+    package_dir={"hnswlib": "python_bindings"},
+    packages=["hnswlib"],
 )
