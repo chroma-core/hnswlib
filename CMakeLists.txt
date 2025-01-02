@@ -62,5 +62,7 @@ if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
 
     add_executable(api_tests tests/cpp/api_test.cpp)
     target_link_libraries(api_tests hnswlib)
-endif()
 
+    add_executable(hnsw-fsck hnsw-fsck.cpp)
+    target_link_libraries(hnsw-fsck hnswlib)
+endif()

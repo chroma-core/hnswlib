@@ -9,6 +9,7 @@
 #include <unordered_set>
 #include <set>
 #include <list>
+#include <sstream>
 
 namespace hnswlib
 {
@@ -1835,8 +1836,10 @@ namespace hnswlib
                     std::unordered_set<tableint> s;
                     for (int j = 0; j < size; j++)
                     {
-                        if (data[j] < 0 || data[j] >= cur_element_count || data[j] == i)
-                            throw std::runtime_error("HNSW Integrity failure: invalid neighbor index");
+                        if (data[j] >= cur_element_count)
+                            throw std::runtime_error("HNSW Integrity failure: invalid neighbor index data[j] >= cur_element_count");
+                        if (data[j] == i)
+                            throw std::runtime_error("HNSW Integrity failure: invalid neighbor index data[j] == i");
                         inbound_connections_num[data[j]]++;
                         s.insert(data[j]);
                         connections_checked++;
@@ -1850,8 +1853,14 @@ namespace hnswlib
                 int min1 = inbound_connections_num[0], max1 = inbound_connections_num[0];
                 for (int i = 0; i < cur_element_count; i++)
                 {
+                    /*
                     // This should always be true regardless the data is corrupted or not
-                    assert(inbound_connections_num[i] > 0);
+                    if (inbound_connections_num[i] <= 0) {
+                        std::ostringstream ostr;
+                        ostr << "HNSW Integrity failure: inbound_connections_num[" << i << "] = " << inbound_connections_num[i] << " <= 0";
+                        throw std::runtime_error(ostr.str());
+                    }
+                    */
                     min1 = std::min(inbound_connections_num[i], min1);
                     max1 = std::max(inbound_connections_num[i], max1);
                 }

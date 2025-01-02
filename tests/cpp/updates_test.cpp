@@ -250,6 +250,7 @@ int main(int argc, char **argv)
     // Adding enterpoint:
 
     appr_alg.addPoint((void *)dummy_batch.data(), (size_t)0);
+    appr_alg.checkIntegrity();
 
     StopW stopw = StopW();
 
