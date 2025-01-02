@@ -1835,7 +1835,7 @@ namespace hnswlib
                     std::unordered_set<tableint> s;
                     for (int j = 0; j < size; j++)
                     {
-                        if (data[j] < 0 || data[j] >= cur_element_count || data[j] == i)
+                        if (data[j] <= 0 || data[j] >= cur_element_count || data[j] == i)
                             throw std::runtime_error("HNSW Integrity failure: invalid neighbor index");
                         inbound_connections_num[data[j]]++;
                         s.insert(data[j]);
