@@ -120,7 +120,7 @@ pub const DEFAULT_MAX_ELEMENTS: usize = 10000;
 pub struct HnswIndexLoadConfig {
     pub distance_function: HnswDistanceFunction,
     pub dimensionality: i32,
-    pub persist_path: Option<PathBuf>,
+    pub persist_path: PathBuf,
 }
 
 pub struct HnswIndexInitConfig {
@@ -183,13 +183,12 @@ impl HnswIndex {
         let ffi_ptr = unsafe { create_index(space_name.as_ptr(), config.dimensionality) };
         read_and_return_hnsw_error(ffi_ptr)?;
 
-        let path = match config.persist_path.clone() {
-            Some(path) => path
-                .to_str()
-                .ok_or_else(|| HnswInitError::InvalidPath("Invalid UTF-8 path".to_string()))?
-                .to_string(),
-            None => "".to_string(),
-        };
+        let path = config
+            .persist_path
+            .clone()
+            .to_str()
+            .ok_or_else(|| HnswInitError::InvalidPath("Invalid UTF-8 path".to_string()))?
+            .to_string();
 
         let path = CString::new(path).map_err(|e| HnswInitError::InvalidPath(e.to_string()))?;
 
@@ -612,7 +611,7 @@ pub mod test {
         let index = HnswIndex::load(HnswIndexLoadConfig {
             distance_function,
             dimensionality: d as i32,
-            persist_path: Some(persist_path.to_path_buf()),
+            persist_path: persist_path.to_path_buf(),
         });
 
         let index = match index {
@@ -814,7 +813,7 @@ pub mod test {
         let index = HnswIndex::load(HnswIndexLoadConfig {
             distance_function,
             dimensionality: d as i32,
-            persist_path: Some(persist_path.to_path_buf()),
+            persist_path: persist_path.to_path_buf(),
         });
 
         assert!(index.is_err());
