@@ -21,16 +21,16 @@ jobs:
       - uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python-version }}
-          
+
       - name: Build and install
         run: python -m pip install .
-      
+
       - name: Test
         timeout-minutes: 15
         run: |
           python -m unittest discover -v --start-directory examples/python --pattern "example*.py"
           python -m unittest discover -v --start-directory tests/python --pattern "bindings_test*.py"
-  
+
   test_cpp:
     runs-on: ${{matrix.os}}
     strategy:
@@ -60,7 +60,7 @@ jobs:
           cd tests/cpp/
           python update_gen_data.py
         shell: bash
-      
+
       - name: Test
         timeout-minutes: 15
         run: |
@@ -83,3 +83,16 @@ jobs:
           ./test_updates update
           ./persistent_test
         shell: bash
+
+  test_rust:
+    runs-on: ${{matrix.os}}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    env:
+      CARGO_TERM_COLOR: always
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test
+        run: |
+          cargo test
