@@ -12,3 +12,4 @@ var/
 **.DS_Store
 *.egg-info/
 venv/
+target

@@ -1,0 +1,13 @@
+[package]
+name = "hnswlib"
+edition = "2021"
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+thiserror = "1.0"
+uuid = { version = "1.13", features = [] }
+
+[build-dependencies]
+cc = "1.2"
