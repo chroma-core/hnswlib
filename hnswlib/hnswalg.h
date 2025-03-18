@@ -1181,6 +1181,45 @@ namespace hnswlib
             return;
         }
 
+        std::pair<size_t, size_t> getLabelCounts() const
+        {
+            size_t non_deleted_labels = 0;
+            size_t deleted_labels = 0;
+            std::unique_lock<std::mutex> label_lock(label_lookup_lock);
+            for (auto it = label_lookup_.begin(); it != label_lookup_.end(); ++it)
+            {
+                if (!isMarkedDeleted(it->second))
+                {
+                    non_deleted_labels += 1;
+                }
+                else
+                {
+                    deleted_labels += 1;
+                }
+            }
+            return std::make_pair(non_deleted_labels, deleted_labels);
+        }
+
+        // Get all labels, segregated by deleted and non deleted.
+        std::pair<std::vector<labeltype>, std::vector<labeltype>> getAllLabels() const
+        {
+            std::vector<labeltype> labels;
+            std::vector<labeltype> deleted_labels;
+            std::unique_lock<std::mutex> label_lock(label_lookup_lock);
+            for (auto it = label_lookup_.begin(); it != label_lookup_.end(); ++it)
+            {
+                if (!isMarkedDeleted(it->second))
+                {
+                    labels.push_back(it->first);
+                }
+                else
+                {
+                    deleted_labels.push_back(it->first);
+                }
+            }
+            return std::make_pair(labels, deleted_labels);
+        }
+
         template <typename data_t>
         std::vector<data_t> getDataByLabel(labeltype label) const
         {
@@ -1796,14 +1835,14 @@ namespace hnswlib
                     std::unordered_set<tableint> s;
                     for (int j = 0; j < size; j++)
                     {
-                        assert(data[j] > 0);
-                        assert(data[j] < cur_element_count);
-                        assert(data[j] != i);
+                        if (data[j] < 0 || data[j] >= cur_element_count || data[j] == i)
+                            throw std::runtime_error("HNSW Integrity failure: invalid neighbor index");
                         inbound_connections_num[data[j]]++;
                         s.insert(data[j]);
                         connections_checked++;
                     }
-                    assert(s.size() == size);
+                    if (s.size() != size)
+                        throw std::runtime_error("HNSW Integrity failure: duplicate neighbor index");
                 }
             }
             if (cur_element_count > 1)
@@ -1811,6 +1850,7 @@ namespace hnswlib
                 int min1 = inbound_connections_num[0], max1 = inbound_connections_num[0];
                 for (int i = 0; i < cur_element_count; i++)
                 {
+                    // This should always be true regardless the data is corrupted or not
                     assert(inbound_connections_num[i] > 0);
                     min1 = std::min(inbound_connections_num[i], min1);
                     max1 = std::max(inbound_connections_num[i], max1);

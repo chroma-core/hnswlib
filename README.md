@@ -10,7 +10,7 @@ platforms via GitHub actions using the
 The `Publish` Github Action is configured to run whenever a version
 tag (a tag string with three period-delimited numbers) is pushed. Is
 is necessary to ensure that the version number in `setup.py` has also
-been updated, or else the `Publish` action will fail.
+been updated, or else the `Publish` action will fail. You must also update the `version` field in `Cargo.toml`.
 
 ### Building AVX Extensions
 
