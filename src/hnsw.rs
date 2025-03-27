@@ -121,6 +121,7 @@ pub struct HnswIndexLoadConfig {
     pub distance_function: HnswDistanceFunction,
     pub dimensionality: i32,
     pub persist_path: PathBuf,
+    pub ef_search: usize,
 }
 
 pub struct HnswIndexInitConfig {
@@ -201,6 +202,7 @@ impl HnswIndex {
             ffi_ptr,
             dimensionality: config.dimensionality,
         };
+        hnsw_index.set_ef(config.ef_search)?;
         Ok(hnsw_index)
     }
 
@@ -612,14 +614,14 @@ pub mod test {
             distance_function,
             dimensionality: d as i32,
             persist_path: persist_path.to_path_buf(),
+            ef_search: 100,
         });
 
         let index = match index {
             Err(e) => panic!("Error loading index: {}", e),
             Ok(index) => index,
         };
-        // TODO: This should be set by the load
-        index.set_ef(100).expect("Should not error");
+        assert_eq!(index.get_ef().expect("Expected to get ef_search"), 100);
 
         // Query the data
         let query = &data[0..d];
@@ -801,7 +803,7 @@ pub mod test {
         }
 
         // Corrupt the linked list
-        let link_list_path = persist_path.join("/link_lists.bin");
+        let link_list_path = persist_path.join("link_lists.bin");
         let mut link_list_file = OpenOptions::new()
             .read(true)
             .write(true)
@@ -814,6 +816,7 @@ pub mod test {
             distance_function,
             dimensionality: d as i32,
             persist_path: persist_path.to_path_buf(),
+            ef_search: 100,
         });
 
         assert!(index.is_err());
