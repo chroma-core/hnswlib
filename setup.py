@@ -127,4 +127,8 @@ setup(
     install_requires=["numpy"],
     cmdclass={"build_ext": BuildExt},
     zip_safe=False,
+    license='Apache-2.0',
+    classifiers=[
+        'License :: OSI Approved :: Apache Software License',
+    ],
 )
