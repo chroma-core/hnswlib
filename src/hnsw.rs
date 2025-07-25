@@ -1,6 +1,6 @@
 use std::{
-    ffi::{c_char, c_int, CString},
-    path::PathBuf,
+    ffi::{c_char, c_int, c_uchar, CString},
+    path::{Path, PathBuf},
     str::Utf8Error,
 };
 use thiserror::Error;
@@ -8,6 +8,13 @@ use thiserror::Error;
 // https://doc.rust-lang.org/nomicon/ffi.html#representing-opaque-structs
 #[repr(C)]
 struct HnswIndexPtrFFI {
+    _data: [u8; 0],
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
+
+// Opaque struct for memory buffers
+#[repr(C)]
+pub struct HnswDataFFI {
     _data: [u8; 0],
     _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
 }
@@ -68,6 +75,29 @@ extern "C" {
     fn capacity(index: *const HnswIndexPtrFFI) -> c_int;
     fn resize_index(index: *const HnswIndexPtrFFI, new_size: usize);
     fn get_last_error(index: *const HnswIndexPtrFFI) -> *const c_char;
+
+    // Memory buffer functions
+    fn serialize_to_hnsw_data(index: *const HnswIndexPtrFFI) -> *const HnswDataFFI;
+    fn load_index_from_hnsw_data(index: *const HnswIndexPtrFFI, buffers: *const HnswDataFFI, max_elements: usize);
+    
+    // Memory buffer management
+    fn create_hnsw_data(own_buffers: bool) -> *const HnswDataFFI;
+    fn free_hnsw_data(buffers: *const HnswDataFFI);
+    
+    // Buffer access functions
+    fn get_header_buffer(buffers: *const HnswDataFFI) -> *const c_uchar;
+    fn get_header_buffer_size(buffers: *const HnswDataFFI) -> usize;
+    fn get_data_level0_buffer(buffers: *const HnswDataFFI) -> *const c_uchar;
+    fn get_data_level0_buffer_size(buffers: *const HnswDataFFI) -> usize;
+    fn get_length_buffer(buffers: *const HnswDataFFI) -> *const c_uchar;
+    fn get_length_buffer_size(buffers: *const HnswDataFFI) -> usize;
+    fn get_link_list_buffer(buffers: *const HnswDataFFI) -> *const c_uchar;
+    fn get_link_list_buffer_size(buffers: *const HnswDataFFI) -> usize;
+
+    fn set_header_buffer(buffers: *const HnswDataFFI, buffer: *const c_uchar, size: usize);
+    fn set_data_level0_buffer(buffers: *const HnswDataFFI, buffer: *const c_uchar, size: usize);
+    fn set_length_buffer(buffers: *const HnswDataFFI, buffer: *const c_uchar, size: usize);
+    fn set_link_list_buffer(buffers: *const HnswDataFFI, buffer: *const c_uchar, size: usize);
 }
 
 #[derive(Error, Debug)]
@@ -122,6 +152,7 @@ pub struct HnswIndexLoadConfig {
     pub dimensionality: i32,
     pub persist_path: PathBuf,
     pub ef_search: usize,
+    pub hnsw_data: HnswData,
 }
 
 pub struct HnswIndexInitConfig {
@@ -332,6 +363,177 @@ impl HnswIndex {
         unsafe { set_ef(self.ffi_ptr, ef as c_int) }
         read_and_return_hnsw_error(self.ffi_ptr)
     }
+
+    /// Serialize the index to memory buffers
+    pub fn serialize_to_hnsw_data(&self) -> Result<HnswData, HnswError> {
+        let buffers_ptr = unsafe { serialize_to_hnsw_data(self.ffi_ptr) };
+        read_and_return_hnsw_error(self.ffi_ptr)?;
+        
+        if buffers_ptr.is_null() {
+            return Err(HnswError::FFIException("Failed to serialize to memory buffers".to_string()));
+        }
+        
+        Ok(HnswData::new_from_ffi(buffers_ptr))
+    }
+
+    /// Load index from memory buffers
+    pub fn load_from_hnsw_data(config: HnswIndexLoadConfig) -> Result<Self, HnswInitError> {
+        let distance_function_string: String = config.distance_function.into();
+        let space_name = CString::new(distance_function_string)
+            .map_err(|e| HnswInitError::InvalidDistanceFunction(e.to_string()))?;
+
+        let ffi_ptr = unsafe { create_index(space_name.as_ptr(), config.dimensionality) };
+        read_and_return_hnsw_error(ffi_ptr)?;
+
+        unsafe {
+            load_index_from_hnsw_data(ffi_ptr, config.hnsw_data.ffi_ptr, DEFAULT_MAX_ELEMENTS);
+        }
+        read_and_return_hnsw_error(ffi_ptr)?;
+
+        let hnsw_index = HnswIndex {
+            ffi_ptr,
+            dimensionality: config.dimensionality,
+        };
+        hnsw_index.set_ef(config.ef_search)?;
+        Ok(hnsw_index)
+    }
+}
+
+/// Safe wrapper for memory buffers containing serialized HNSW index data
+pub struct HnswData {
+    ffi_ptr: *const HnswDataFFI,
+    _marker: std::marker::PhantomData<*mut ()>, // Prevents Copy trait
+    // Hold Arc references to prevent premature buffer deallocation
+    header_buffer: Option<std::sync::Arc<Vec<u8>>>,
+    data_level0_buffer: Option<std::sync::Arc<Vec<u8>>>,
+    length_buffer: Option<std::sync::Arc<Vec<u8>>>,
+    link_list_buffer: Option<std::sync::Arc<Vec<u8>>>,
+}
+
+unsafe impl Sync for HnswData {}
+unsafe impl Send for HnswData {}
+
+impl Default for HnswData {
+    fn default() -> Self {
+        Self {
+            ffi_ptr: std::ptr::null(),
+            _marker: std::marker::PhantomData,
+            header_buffer: None,
+            data_level0_buffer: None,
+            length_buffer: None,
+            link_list_buffer: None,
+        }
+    }
+}
+
+impl HnswData {
+    /// Create new empty memory buffers with ownership (default: owning)
+    pub fn new() -> Self {
+        Self::new_non_owning()
+    }
+
+    /// Create new empty memory buffers that own their data
+    pub fn new_owning() -> Self {
+        let ffi_ptr = unsafe { create_hnsw_data(true) };
+        HnswData::new_from_ffi(ffi_ptr)
+    }
+
+    /// Create new empty memory buffers that do not own their data
+    pub fn new_non_owning() -> Self {
+        let ffi_ptr = unsafe { create_hnsw_data(false) };
+        HnswData::new_from_ffi(ffi_ptr)
+    }
+
+    /// Create new memory buffers from an existing FFI pointer
+    pub fn new_from_ffi(ffi_ptr: *const HnswDataFFI) -> Self {
+        HnswData { 
+            ffi_ptr, 
+            _marker: std::marker::PhantomData,
+            header_buffer: None,
+            data_level0_buffer: None,
+            length_buffer: None,
+            link_list_buffer: None,
+        }
+    }
+
+    pub fn set_buffers(
+        &mut self, 
+        header_buffer: std::sync::Arc<Vec<u8>>, 
+        data_level0_buffer: std::sync::Arc<Vec<u8>>, 
+        length_buffer: std::sync::Arc<Vec<u8>>, 
+        link_list_buffer: std::sync::Arc<Vec<u8>>
+    ) {
+        unsafe {
+            set_header_buffer(self.ffi_ptr, header_buffer.as_ptr(), header_buffer.len());
+            set_data_level0_buffer(self.ffi_ptr, data_level0_buffer.as_ptr(), data_level0_buffer.len());
+            set_length_buffer(self.ffi_ptr, length_buffer.as_ptr(), length_buffer.len());
+            set_link_list_buffer(self.ffi_ptr, link_list_buffer.as_ptr(), link_list_buffer.len());
+        }
+        
+        // Store Arc references to prevent premature deallocation
+        self.header_buffer = Some(header_buffer);
+        self.data_level0_buffer = Some(data_level0_buffer);
+        self.length_buffer = Some(length_buffer);
+        self.link_list_buffer = Some(link_list_buffer);
+    }
+
+    /// Get the header buffer as a byte slice
+    pub fn header_buffer(&self) -> &[u8] {
+        unsafe {
+            let ptr = get_header_buffer(self.ffi_ptr);
+            let size = get_header_buffer_size(self.ffi_ptr);
+            if ptr.is_null() || size == 0 {
+                &[]
+            } else {
+                std::slice::from_raw_parts(ptr as *const u8, size)
+            }
+        }
+    }
+
+    /// Get the data level 0 buffer as a byte slice
+    pub fn data_level0_buffer(&self) -> &[u8] {
+        unsafe {
+            let ptr = get_data_level0_buffer(self.ffi_ptr);
+            let size = get_data_level0_buffer_size(self.ffi_ptr);
+            if ptr.is_null() || size == 0 {
+                &[]
+            } else {
+                std::slice::from_raw_parts(ptr as *const u8, size)
+            }
+        }
+    }
+
+    /// Get the length buffer as a byte slice
+    pub fn length_buffer(&self) -> &[u8] {
+        unsafe {
+            let ptr = get_length_buffer(self.ffi_ptr);
+            let size = get_length_buffer_size(self.ffi_ptr);
+            if ptr.is_null() || size == 0 {
+                &[]
+            } else {
+                std::slice::from_raw_parts(ptr as *const u8, size)
+            }
+        }
+    }
+
+    /// Get the link list buffer as a byte slice
+    pub fn link_list_buffer(&self) -> &[u8] {
+        unsafe {
+            let ptr = get_link_list_buffer(self.ffi_ptr);
+            let size = get_link_list_buffer_size(self.ffi_ptr);
+            if ptr.is_null() || size == 0 {
+                &[]
+            } else {
+                std::slice::from_raw_parts(ptr as *const u8, size)
+            }
+        }
+    }
+}
+
+impl Drop for HnswData {
+    fn drop(&mut self) {
+        unsafe { if !self.ffi_ptr.is_null() { free_hnsw_data(self.ffi_ptr) } }
+    }
 }
 
 fn read_and_return_hnsw_error(ffi_ptr: *const HnswIndexPtrFFI) -> Result<(), HnswError> {
@@ -355,6 +557,7 @@ impl Drop for HnswIndex {
 pub mod test {
     use std::fs::OpenOptions;
     use std::io::Write;
+    use std::sync::Arc;
 
     use super::*;
     use rand::seq::IteratorRandom;
@@ -615,6 +818,7 @@ pub mod test {
             dimensionality: d as i32,
             persist_path: persist_path.to_path_buf(),
             ef_search: 100,
+            hnsw_data: HnswData::default(),
         });
 
         let index = match index {
@@ -635,6 +839,161 @@ pub mod test {
 
         // Get the data and check it
         index_data_same(&index, &ids, &data, d);
+    }
+
+    #[test]
+    fn it_can_persist_and_load_from_memory() {
+        let n = 1000;
+        let d: usize = 960;
+        let distance_function = HnswDistanceFunction::Euclidean;
+        let tmp_dir = tempdir().unwrap();
+        let persist_path = tmp_dir.path();
+        let index = HnswIndex::init(HnswIndexInitConfig {
+            distance_function,
+            dimensionality: d as i32,
+            max_elements: n,
+            m: 16,
+            ef_construction: 100,
+            ef_search: 100,
+            random_seed: 0,
+            persist_path: Some(persist_path.to_path_buf()),
+        });
+
+        let index = match index {
+            Err(e) => panic!("Error initializing index: {}", e),
+            Ok(index) => index,
+        };
+
+        let data: Vec<f32> = generate_random_data(n, d);
+        let ids: Vec<usize> = (0..n).collect();
+
+        (0..n).for_each(|i| {
+            let data = &data[i * d..(i + 1) * d];
+            index.add(ids[i], data).expect("Should not error");
+        });
+
+        // Persist the index
+        let res = index.save();
+        if let Err(e) = res {
+            panic!("Error saving index: {}", e);
+        }
+
+        // Load the index from memory instead
+        let files = ["header", "data_level0", "length", "link_lists"];
+        let ext = "bin";
+        let mut src_buffers = Vec::new();
+
+        for file in files {
+            let path = persist_path.join(file).with_extension(ext);
+            let data = std::fs::read(path).expect("Unable to read file");
+            src_buffers.push(Arc::new(data));
+        }
+
+        let mut hnsw_data = HnswData::new();
+        hnsw_data.set_buffers(src_buffers[0].clone(), src_buffers[1].clone(),
+        src_buffers[2].clone(), src_buffers[3].clone());
+
+        let index = HnswIndex::load_from_hnsw_data(HnswIndexLoadConfig {
+            distance_function,
+            dimensionality: d as i32,
+            persist_path: "".into(),
+            ef_search: 100,
+            hnsw_data,
+        });
+
+        let index = match index {
+            Err(e) => panic!("Error loading index: {}", e),
+            Ok(index) => index,
+        };
+        assert_eq!(index.get_ef().expect("Expected to get ef_search"), 100);
+
+        // Query the data
+        let query = &data[0..d];
+        let allow_ids = &[];
+        let disallow_ids = &[];
+        let (ids, distances) = index.query(query, 1, allow_ids, disallow_ids).unwrap();
+        assert_eq!(ids.len(), 1);
+        assert_eq!(distances.len(), 1);
+        assert_eq!(ids[0], 0);
+        assert_eq!(distances[0], 0.0);
+
+        // Get the data and check it
+        index_data_same(&index, &ids, &data, d);
+    }
+
+    #[test]
+    fn it_can_serialize_and_deserialize_hnsw_data() {
+        let n = 100;
+        let d: usize = 128;
+        let distance_function = HnswDistanceFunction::Euclidean;
+        let tmp_dir = tempdir().unwrap();
+        let persist_path = tmp_dir.path();
+        
+        // Create and populate original index
+        let original_index = HnswIndex::init(HnswIndexInitConfig {
+            distance_function,
+            dimensionality: d as i32,
+            max_elements: n,
+            m: 16,
+            ef_construction: 100,
+            ef_search: 100,
+            random_seed: 42,
+            persist_path: Some(persist_path.to_path_buf()),
+        }).expect("Failed to create original index");
+
+        let data: Vec<f32> = generate_random_data(n, d);
+        let ids: Vec<usize> = (0..n).collect();
+
+        // Add data to original index
+        for i in 0..n {
+            let data_slice = &data[i * d..(i + 1) * d];
+            original_index.add(ids[i], data_slice).expect("Should not error");
+        }
+
+        // Verify original index has correct data
+        assert_eq!(original_index.len(), n);
+        index_data_same(&original_index, &ids, &data, d);
+
+        // Serialize to memory buffers
+        let hnsw_data = original_index.serialize_to_hnsw_data()
+            .expect("Failed to serialize to memory buffers");
+
+        // Verify buffers are not empty
+        assert!(!hnsw_data.header_buffer().is_empty(), "Header buffer should not be empty");
+        assert!(!hnsw_data.data_level0_buffer().is_empty(), "Data level0 buffer should not be empty");
+        assert!(!hnsw_data.length_buffer().is_empty(), "Length buffer should not be empty");
+        assert!(!hnsw_data.link_list_buffer().is_empty(), "Link list buffer should not be empty");
+
+        // Create new index from memory buffers
+        let loaded_index = HnswIndex::load_from_hnsw_data(
+            HnswIndexLoadConfig {
+                distance_function,
+                dimensionality: d as i32,
+                persist_path: "".into(),
+                ef_search: 100,
+                hnsw_data,
+            },
+        ).expect("Failed to load from memory buffers");
+
+        // Verify loaded index has same data
+        assert_eq!(loaded_index.len(), n);
+        index_data_same(&loaded_index, &ids, &data, d);
+
+        // Test querying both indices to ensure they behave the same
+        let query_vector = &data[0..d]; // Use first vector as query
+        let k = 5;
+        
+        let (original_ids, original_distances) = original_index.query(query_vector, k, &[], &[])
+            .expect("Query should not error");
+        let (loaded_ids, loaded_distances) = loaded_index.query(query_vector, k, &[], &[])
+            .expect("Query should not error");
+
+        // Results should be identical
+        assert_eq!(original_ids, loaded_ids, "Query results should be identical");
+        assert_eq!(original_distances.len(), loaded_distances.len());
+        for (orig_dist, loaded_dist) in original_distances.iter().zip(loaded_distances.iter()) {
+            assert!((orig_dist - loaded_dist).abs() < EPS, "Distances should be nearly identical");
+        }
     }
 
     #[test]
@@ -817,6 +1176,7 @@ pub mod test {
             dimensionality: d as i32,
             persist_path: persist_path.to_path_buf(),
             ef_search: 100,
+            hnsw_data: HnswData::default(),
         });
 
         assert!(index.is_err());

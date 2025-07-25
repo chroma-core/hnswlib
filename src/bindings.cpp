@@ -1,6 +1,5 @@
 // Assumes that chroma-hnswlib is checked out at the same level as chroma
 #include "../hnswlib/hnswlib.h"
-#include <thread>
 
 class AllowAndDisallowListFilterFunctor : public hnswlib::BaseFilterFunctor
 {
@@ -99,6 +98,32 @@ public:
     index_inited = true;
   }
 
+  void load_index_from_buffers(const char *header_buffer, size_t header_len,
+                               const char *data_buffer, size_t data_len,
+                               const char *index_buffer, size_t index_len,
+                               const char *deleted_buffer, size_t deleted_len,
+                               const bool allow_replace_deleted,
+                               const bool normalize,
+                               const size_t max_elements)
+  {
+    if (index_inited)
+    {
+      throw std::runtime_error("Index already inited");
+    }
+    
+    std::string header_str(header_buffer, header_len);
+    std::string data_str(data_buffer, data_len);
+    std::string index_str(index_buffer, index_len);
+    std::string deleted_str(deleted_buffer, deleted_len);
+    
+    appr_alg = new hnswlib::HierarchicalNSW<dist_t>(l2space, header_str.c_str(), data_str.c_str(), 
+                                                    index_str.c_str(), deleted_str.c_str(), 
+                                                    false, max_elements, allow_replace_deleted, normalize);
+    // TODO(rescrv,sicheng): check integrity
+    // appr_alg->checkIntegrity();
+    index_inited = true;
+  }
+
   void persist_dirty()
   {
     if (!index_inited)
@@ -122,7 +147,7 @@ public:
   {
     if (!index_inited)
     {
-      throw std::runtime_error("Inde not inited");
+      throw std::runtime_error("Index not inited");
     }
     std::vector<data_t> ret_data = appr_alg->template getDataByLabel<data_t>(id); // This checks if id is deleted
     for (int i = 0; i < dim; i++)
@@ -506,5 +531,133 @@ extern "C"
   void close_fd(Index<float> *index)
   {
     index->close_fd();
+  }
+
+  // Memory buffer serialization functions
+  // Can throw std::exception
+  hnswlib::HnswData* serialize_to_hnsw_data(Index<float> *index)
+  {
+    try
+    {
+      return index->appr_alg->serializeToHnswData();
+    }
+    catch (std::exception &e)
+    {
+      last_error = e.what();
+      return nullptr;
+    }
+    last_error.clear();
+  }
+
+  // Can throw std::exception
+  void load_index_from_hnsw_data(Index<float> *index, const hnswlib::HnswData* data, const size_t max_elements)
+  {
+    if (index->index_inited)
+    {
+      last_error = "Index already inited";
+      return;
+    }
+    
+    try
+    {
+
+      index->appr_alg = new hnswlib::HierarchicalNSW<float>(index->l2space, 
+                                                            data, false,
+                                                            max_elements, false,
+                                                            index->normalize);
+      index->index_inited = true;
+    }
+    catch (std::exception &e)
+    {
+      last_error = e.what();
+      return;
+    }
+    last_error.clear();
+  }
+
+  // Memory buffer management functions
+  hnswlib::HnswData* create_hnsw_data()
+  {
+    return new hnswlib::HnswData(false /* own_buffers */);
+  }
+
+  void free_hnsw_data(hnswlib::HnswData* data)
+  {
+    if (data) {
+      delete data;
+    }
+  }
+
+  void set_header_buffer(hnswlib::HnswData* data, char* header_buffer, size_t header_size)
+  {
+    if (data) {
+      data->header_buffer = header_buffer;
+      data->header_size = header_size;
+    }
+  }
+
+  void set_data_level0_buffer(hnswlib::HnswData* data, char* data_level0_buffer, size_t data_level0_size)
+  {
+    if (data) {
+      data->data_level0_buffer = data_level0_buffer;
+      data->data_level0_size = data_level0_size;
+    }
+  }
+
+  void set_length_buffer(hnswlib::HnswData* data, char* length_buffer, size_t length_size)
+  {
+    if (data) {
+      data->length_buffer = length_buffer;
+      data->length_size = length_size;
+    }
+  }
+
+  void set_link_list_buffer(hnswlib::HnswData* data, char* link_list_buffer, size_t link_list_size)
+  {
+    if (data) {
+      data->link_list_buffer = link_list_buffer;
+      data->link_list_size = link_list_size;
+    }
+  }
+
+  // Buffer access functions for Rust FFI
+  char* get_header_buffer(hnswlib::HnswData* data)
+  {
+    return data ? data->header_buffer : nullptr;
+  }
+
+  size_t get_header_buffer_size(hnswlib::HnswData* data)
+  {
+    return data ? data->header_size : 0;
+  }
+
+  char* get_data_level0_buffer(hnswlib::HnswData* data)
+  {
+    return data ? data->data_level0_buffer : nullptr;
+  }
+
+  size_t get_data_level0_buffer_size(hnswlib::HnswData* data)
+  {
+    return data ? data->data_level0_size : 0;
+  }
+
+  char* get_length_buffer(hnswlib::HnswData* data)
+  {
+    return data ? data->length_buffer : nullptr;
+  }
+
+  size_t get_length_buffer_size(hnswlib::HnswData* data)
+  {
+    return data ? data->length_size : 0;
+  }
+
+  char* get_link_list_buffer(hnswlib::HnswData* data)
+  {
+    return data ? data->link_list_buffer : nullptr;
+  }
+
+  size_t get_link_list_buffer_size(hnswlib::HnswData* data)
+  {
+    return data ? data->link_list_size : 0;
   }
 }

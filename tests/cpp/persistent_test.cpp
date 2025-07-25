@@ -1,4 +1,5 @@
 #include "../../hnswlib/hnswlib.h"
+#include "hnswlib/hnswalg.h"
 
 #include <assert.h>
 
@@ -79,6 +80,63 @@ namespace
         }
 
         delete alg_hnsw;
+    }
+
+    void testMemorySerialization()
+    {
+        idx_t n = 100;
+        idx_t nq = 10;
+        size_t k = 10;
+
+        int d = 1536;
+        std::vector<float> data(n * d);
+        std::vector<float> query(nq * d);
+
+        std::mt19937 rng;
+        rng.seed(47);
+        std::uniform_real_distribution<> distrib;
+
+        for (idx_t i = 0; i < n * d; i++)
+        {
+            data[i] = distrib(rng);
+        }
+        for (idx_t i = 0; i < nq * d; ++i)
+        {
+            query[i] = distrib(rng);
+        }
+
+        hnswlib::InnerProductSpace space(d);
+        hnswlib::HierarchicalNSW<float> *alg_hnsw = new hnswlib::HierarchicalNSW<float>(&space, 2 * n, 16, 200, 100, false, false, true, ".");
+
+        for (size_t i = 0; i < n; i++)
+        {
+            alg_hnsw->addPoint(data.data() + d * i, i);
+            if (i % 7 == 0)
+                alg_hnsw->persistDirty();
+        }
+        
+        hnswlib::HnswData* ser_data = nullptr;
+        alg_hnsw->saveToHnswData(&ser_data);
+        assert(ser_data);
+        alg_hnsw->persistDirty();
+
+
+        // This test owns the buffer memory now so delete alg_hnsw
+        delete alg_hnsw;
+
+        assert(ser_data->matchesWithDirectory("."));
+
+        hnswlib::HierarchicalNSW<float> *alg_hnsw2 = new hnswlib::HierarchicalNSW<float>(&space, ser_data, false, 2 * n, false, false);
+
+        hnswlib::HnswData* ser_data2 = nullptr;
+        alg_hnsw2->saveToHnswData(&ser_data2);
+        delete alg_hnsw2;
+        assert(ser_data2);
+        assert(ser_data2->matchesWithDirectory("."));
+
+
+        delete ser_data;
+        delete ser_data2;
     }
 
     void testResizePersistentIndex()
@@ -530,6 +588,8 @@ int main()
     std::cout << "Testing ..." << std::endl;
     testPersistentIndex();
     std::cout << "Test testPersistentIndex ok" << std::endl;
+    testMemorySerialization();
+    std::cout << "Test testMemorySerialization ok" << std::endl;
     testResizePersistentIndex();
     std::cout << "Test testResizePersistentIndex ok" << std::endl;
     testAddUpdatePersistentIndex();
