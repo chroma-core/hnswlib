@@ -1,4 +1,5 @@
 #include "../../hnswlib/hnswlib.h"
+#include "hnswlib/hnswalg.h"
 
 #include <assert.h>
 
@@ -7,7 +8,6 @@
 
 namespace
 {
-
     using idx_t = hnswlib::labeltype;
 
     void testPersistentIndex()
@@ -79,6 +79,73 @@ namespace
         }
 
         delete alg_hnsw;
+    }
+
+    void testMemorySerialization()
+    {
+        idx_t n = 100;
+        idx_t nq = 10;
+        size_t k = 10;
+
+        int d = 1536;
+        std::vector<float> data(n * d);
+        std::vector<float> query(nq * d);
+
+        std::mt19937 rng;
+        rng.seed(47);
+        std::uniform_real_distribution<> distrib;
+
+        for (idx_t i = 0; i < n * d; i++)
+        {
+            data[i] = distrib(rng);
+        }
+        for (idx_t i = 0; i < nq * d; ++i)
+        {
+            query[i] = distrib(rng);
+        }
+
+        hnswlib::InnerProductSpace space(d);
+        hnswlib::HierarchicalNSW<float> *alg_hnsw = new hnswlib::HierarchicalNSW<float>(&space, 2 * n, 16, 200, 100, false, false, true, ".");
+
+        for (size_t i = 0; i < n; i++)
+        {
+            alg_hnsw->addPoint(data.data() + d * i, i);
+            if (i % 7 == 0)
+                alg_hnsw->persistDirty();
+        }
+
+        auto header_buf = std::unique_ptr<std::vector<char>>(new std::vector<char>(alg_hnsw->getRequiredHeaderSize()));
+        auto data_level0_buf = std::unique_ptr<std::vector<char>>(new std::vector<char>(alg_hnsw->getRequiredDataLevel0Size()));
+        auto length_buf = std::unique_ptr<std::vector<char>>(new std::vector<char>(alg_hnsw->getRequiredLengthSize()));
+        auto link_list_buf = std::unique_ptr<std::vector<char>>(new std::vector<char>(alg_hnsw->getRequiredLinkListSize()));
+
+        auto ser_data = new hnswlib::HnswDataMut(header_buf->data(), header_buf->size(), data_level0_buf->data(), data_level0_buf->size(), length_buf->data(), length_buf->size(), link_list_buf->data(), link_list_buf->size());
+
+        alg_hnsw->serializeToHnswData(ser_data);
+        alg_hnsw->persistDirty();
+
+
+        // This test should be fine even if we delete the index here.
+        delete alg_hnsw;
+
+        assert(ser_data->matchesWithDirectory("."));
+
+
+        hnswlib::HierarchicalNSW<float> *alg_hnsw2 = new hnswlib::HierarchicalNSW<float>(&space, *ser_data->getView(), false, 2 * n, false, false);
+
+        auto header_buf2 = std::unique_ptr<std::vector<char>>(new std::vector<char>(alg_hnsw2->getRequiredHeaderSize()));
+        auto data_level0_buf2 = std::unique_ptr<std::vector<char>>(new std::vector<char>(alg_hnsw2->getRequiredDataLevel0Size()));
+        auto length_buf2 = std::unique_ptr<std::vector<char>>(new std::vector<char>(alg_hnsw2->getRequiredLengthSize()));
+        auto link_list_buf2 = std::unique_ptr<std::vector<char>>(new std::vector<char>(alg_hnsw2->getRequiredLinkListSize()));
+
+        auto ser_data2 = new hnswlib::HnswDataMut(header_buf2->data(), header_buf2->size(), data_level0_buf2->data(), data_level0_buf2->size(), length_buf2->data(), length_buf2->size(), link_list_buf2->data(), link_list_buf2->size());
+        alg_hnsw2->serializeToHnswData(ser_data2);
+        delete alg_hnsw2;
+        assert(ser_data2->matchesWithDirectory("."));
+
+
+        delete ser_data;
+        delete ser_data2;
     }
 
     void testResizePersistentIndex()
@@ -530,6 +597,8 @@ int main()
     std::cout << "Testing ..." << std::endl;
     testPersistentIndex();
     std::cout << "Test testPersistentIndex ok" << std::endl;
+    testMemorySerialization();
+    std::cout << "Test testMemorySerialization ok" << std::endl;
     testResizePersistentIndex();
     std::cout << "Test testResizePersistentIndex ok" << std::endl;
     testAddUpdatePersistentIndex();
