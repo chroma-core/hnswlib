@@ -4,6 +4,7 @@ use std::{
     str::Utf8Error,
 };
 use thiserror::Error;
+use tracing::Level;
 
 // https://doc.rust-lang.org/nomicon/ffi.html#representing-opaque-structs
 #[repr(C)]
@@ -230,6 +231,7 @@ impl HnswIndex {
     }
 
     pub fn resize(&mut self, new_size: usize) -> Result<(), HnswError> {
+        tracing::event!(Level::INFO, name = "resize", new_size =? new_size);
         unsafe { resize_index(self.ffi_ptr, new_size) }
         read_and_return_hnsw_error(self.ffi_ptr)
     }
