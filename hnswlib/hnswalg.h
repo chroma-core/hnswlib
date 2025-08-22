@@ -5,13 +5,156 @@
 #include <atomic>
 #include <random>
 #include <stdlib.h>
+#include <streambuf>
+#include <istream>
 #include <assert.h>
+#include <memory>
+#include <string>
 #include <unordered_set>
 #include <set>
-#include <list>
+#include <cstring>
 
 namespace hnswlib
 {
+    #define HEADER_FIELDS(ACTION) \
+    ACTION(PERSISTENCE_VERSION) \
+    ACTION(offsetLevel0_) \
+    ACTION(max_elements_) \
+    ACTION(cur_element_count) \
+    ACTION(size_data_per_element_) \
+    ACTION(label_offset_) \
+    ACTION(offsetData_) \
+    ACTION(maxlevel_) \
+    ACTION(enterpoint_node_) \
+    ACTION(maxM_) \
+    ACTION(maxM0_) \
+    ACTION(M_) \
+    ACTION(mult_) \
+    ACTION(ef_construction_)
+    
+    // --- Input Streambuf (read from memory) ---
+    class in_membuf : public std::streambuf {
+    public:
+        in_membuf(const char* data, std::size_t size) {
+            char* p = const_cast<char*>(data);
+            setg(p, p, p + size);  // set get pointers
+        }
+    };
+    
+    // --- Input Stream ---
+    class memistream : public std::istream {
+     public:
+        memistream(const char* data, std::size_t size)
+            : std::istream(&buf), buf(data, size) {}
+    
+     private:
+        in_membuf buf;
+    };
+
+    struct InputPersistenceStreams {
+        std::shared_ptr<std::istream> header_stream;
+        std::shared_ptr<std::istream> data_level0_stream;
+        std::shared_ptr<std::istream> length_stream;
+        std::shared_ptr<std::istream> link_list_stream;
+    };
+
+    // --- Memory Buffer Container for Persistence ---
+    template <typename BufferType>
+    struct HnswData {
+        static_assert(
+            std::is_same<BufferType, char>::value || std::is_same<BufferType, const char>::value,
+            "HnswData BufferType must be char or const char"
+        );
+
+        BufferType* header_buffer;
+        size_t header_size;
+        BufferType* data_level0_buffer;
+        size_t data_level0_size;
+        BufferType* length_buffer;
+        size_t length_size;
+        BufferType* link_list_buffer;
+        size_t link_list_size;
+        
+        ~HnswData() {}
+        
+        // Constructor for external buffers (from Rust)
+        HnswData(BufferType* header_buf, size_t header_sz,
+                 BufferType* data_level0_buf, size_t data_level0_sz,
+                 BufferType* length_buf, size_t length_sz,
+                 BufferType* link_list_buf, size_t link_list_sz) 
+            : header_buffer(header_buf), header_size(header_sz),
+              data_level0_buffer(data_level0_buf), data_level0_size(data_level0_sz),
+              length_buffer(length_buf), length_size(length_sz),
+              link_list_buffer(link_list_buf), link_list_size(link_list_sz) {}
+
+        const HnswData<const BufferType> *getView() const {
+            return reinterpret_cast<const HnswData<const BufferType> *>(this);
+        }
+
+        // USED ONLY IN TESTS
+        bool matchesWithDirectory(const std::string& directory) const {
+            if (header_buffer == nullptr || data_level0_buffer == nullptr || length_buffer == nullptr || link_list_buffer == nullptr) {
+                printf("HnswData is not initialized\n");
+                return false;
+            }
+
+            struct file_test_info {
+                const char *filename;
+                const BufferType *buffer_ptr;
+                size_t buffer_size;
+            };
+
+            file_test_info files[] = {
+                {"header", header_buffer, header_size},
+                {"data_level0", data_level0_buffer, data_level0_size},
+                {"length", length_buffer, length_size},
+                {"link_lists", link_list_buffer, link_list_size}
+            };
+            
+            for (const auto& file : files) {
+                printf("testing %s\n", file.filename);
+                std::ifstream file_stream(directory + "/" + file.filename + ".bin");
+                if (!file_stream.is_open()) {
+                    printf("File %s not found\n", file.filename);
+                    return false;
+                }
+
+                file_stream.seekg(0, file_stream.end);
+                size_t file_size = file_stream.tellg();
+                file_stream.seekg(0, file_stream.beg);
+
+                if (file_size != file.buffer_size) {
+                    printf("File %s size mismatch %ld != %ld\n", file.filename, file_size, file.buffer_size);
+                    return false;
+                }
+
+                std::vector<char> file_content(file_size);
+                file_stream.read(file_content.data(), file_size);
+                file_stream.close();
+            
+                if (file_content != std::vector<char>(file.buffer_ptr, file.buffer_ptr + file.buffer_size)) {
+                    printf("File %s content mismatch\n", file.filename);
+                    printf("File content:\n");
+                    for (size_t i = 0; i < file_size; i++) {
+                        printf("%02x ", file_content[i]);
+                    }
+                    printf("\n");
+                    printf("Buffer content:\n");
+                    for (size_t i = 0; i < file.buffer_size; i++) {
+                        printf("%02x ", file.buffer_ptr[i]);
+                    }
+                    printf("\n");
+                    return false;
+                }
+            }
+
+            return true;
+        }
+    };
+
+    using HnswDataMut = HnswData<char>;
+    using HnswDataView = HnswData<const char>;
+
     typedef unsigned int tableint;
     typedef unsigned int linklistsizeint;
     const int PERSISTENCE_VERSION = 1; // Used by persistent indices to check if the index on disk is compatible with the code
@@ -26,7 +169,7 @@ namespace hnswlib
         size_t max_elements_{0};
         mutable std::atomic<size_t> cur_element_count{0}; // current number of elements
         size_t size_data_per_element_{0};
-        size_t size_links_per_element_{0};
+        unsigned int size_links_per_element_{0};
         mutable std::atomic<size_t> num_deleted_{0}; // number of deleted elements
         size_t M_{0};
         size_t maxM_{0};
@@ -112,6 +255,21 @@ namespace hnswlib
             {
                 loadIndex(location, s, max_elements);
             }
+        }
+
+        HierarchicalNSW(
+            SpaceInterface<dist_t> *s,
+            const HnswDataView &buffers,
+            bool nmslib = false,
+            size_t max_elements = 0,
+            bool allow_replace_deleted = false,
+            bool normalize = false)
+            : allow_replace_deleted_(allow_replace_deleted),
+              normalize_(normalize),
+              persist_on_write_(false),
+              persist_location_("")
+        {
+            loadPersistedIndexFromMemory(s, buffers, max_elements);
         }
 
         HierarchicalNSW(
@@ -732,6 +890,8 @@ namespace hnswlib
             std::ofstream output(location, std::ios::binary);
             std::streampos position;
 
+            // IF THIS IS CHANGED: PLEASE MAKE CORRESPONDING MODIFICATIONS TO
+            // THE HEADER_FIELDS MACRO.
             writeBinaryPOD(output, offsetLevel0_);
             writeBinaryPOD(output, max_elements_);
             writeBinaryPOD(output, cur_element_count);
@@ -879,29 +1039,13 @@ namespace hnswlib
             openPersistentIndex();
         }
 
-        void persistHeader(std::ofstream &output_header)
+        void persistHeader(std::ostream &output_header)
         {
-            if (!persist_on_write_)
-            {
-                throw std::runtime_error("persistHeader called for an index that is not set to persist on write");
-            }
-
             output_header.seekp(0, std::ios::beg);
-            writeBinaryPOD(output_header, PERSISTENCE_VERSION);
-            writeBinaryPOD(output_header, offsetLevel0_);
-            writeBinaryPOD(output_header, max_elements_);
-            writeBinaryPOD(output_header, cur_element_count); // needs to be updated
-            writeBinaryPOD(output_header, size_data_per_element_);
-            writeBinaryPOD(output_header, label_offset_);
-            writeBinaryPOD(output_header, offsetData_);
-            writeBinaryPOD(output_header, maxlevel_);        // needs to be updated
-            writeBinaryPOD(output_header, enterpoint_node_); // does this need to be updated?
-            writeBinaryPOD(output_header, maxM_);
 
-            writeBinaryPOD(output_header, maxM0_);
-            writeBinaryPOD(output_header, M_);
-            writeBinaryPOD(output_header, mult_); // does this need to be updated?
-            writeBinaryPOD(output_header, ef_construction_);
+            #define WRITE_ACTION(field) writeBinaryPOD(output_header, field);
+            HEADER_FIELDS(WRITE_ACTION)
+            #undef WRITE_ACTION
 
             output_header.flush();
         }
@@ -974,11 +1118,110 @@ namespace hnswlib
             elements_to_persist_.clear();
         }
 
-        void loadPersistedIndex(SpaceInterface<dist_t> *s, size_t max_elements_i = 0)
+        constexpr size_t calculateHeaderSize() const {
+            #define SIZE_ACTION(field) + sizeof(field)
+            return 0 HEADER_FIELDS(SIZE_ACTION);
+            #undef SIZE_ACTION
+        }
+
+        size_t calculateLinkListSize() {
+            size_t total_size = 0;
+            for (size_t i = 0; i < cur_element_count; i++) {
+                unsigned int linkListSize = element_levels_[i] > 0 ? size_links_per_element_ * element_levels_[i] : 0;
+                total_size += sizeof(linkListSize) + linkListSize;
+            }
+            return total_size;
+        }
+
+        size_t calculateDataLevel0Size() {
+            return max_elements_ * size_data_per_element_;
+        }
+
+        size_t calculateLengthSize() {
+            return max_elements_ * sizeof(float);
+        }
+
+        void serializeHeaderToBuffer(char* buffer, size_t buffer_size) {
+            char *init_buffer = buffer;
+            #define WRITE_ACTION(field) \
+                do { memcpy(buffer, &(field), sizeof(field)); buffer += sizeof(field); } while (0);
+            HEADER_FIELDS(WRITE_ACTION)
+            #undef WRITE_ACTION
+        }
+
+        void serializeDataLevel0ToBuffer(char* buffer, size_t buffer_size) {
+            memcpy(buffer, data_level0_memory_, max_elements_ * size_data_per_element_);
+        }
+
+        void serializeLengthToBuffer(char* buffer, size_t buffer_size) {
+            memcpy(buffer, length_memory_, max_elements_ * sizeof(float));
+        }
+
+        void serializeLinkListsToBuffer(char* buffer, size_t buffer_size) {
+            for (size_t i = 0; i < cur_element_count; i++) {
+                unsigned int linkListSize = element_levels_[i] > 0 ? size_links_per_element_ * element_levels_[i] : 0;
+                memcpy(buffer, &linkListSize, sizeof(linkListSize));
+                buffer += sizeof(linkListSize);
+                if (linkListSize) {
+                    memcpy(buffer, linkLists_[i], linkListSize);
+                    buffer += linkListSize;
+                }
+            }
+        }
+
+        // Functions for Rust to query required buffer sizes
+        size_t getRequiredHeaderSize() const {
+            return calculateHeaderSize();
+        }
+        
+        size_t getRequiredDataLevel0Size() {
+            return calculateDataLevel0Size();
+        }
+        
+        size_t getRequiredLengthSize() {
+            return calculateLengthSize();
+        }
+        
+        size_t getRequiredLinkListSize() {
+            return calculateLinkListSize();
+        }
+        
+        // Serialize to externally provided buffers (from Rust)
+        HnswDataMut* serializeToHnswData(HnswDataMut* hnsw_data) {
+            // Verify buffer sizes match requirements
+            if (hnsw_data->header_size < calculateHeaderSize()) {
+                throw std::runtime_error("Header buffer too small");
+            }
+            if (hnsw_data->data_level0_size < calculateDataLevel0Size()) {
+                throw std::runtime_error("Data level0 buffer too small");
+            }
+            if (hnsw_data->length_size < calculateLengthSize()) {
+                throw std::runtime_error("Length buffer too small");
+            }
+            if (hnsw_data->link_list_size < calculateLinkListSize()) {
+                throw std::runtime_error("Link list buffer too small");
+            }
+            
+            // Serialize to the provided buffers
+            serializeHeaderToBuffer(hnsw_data->header_buffer, hnsw_data->header_size);
+            serializeDataLevel0ToBuffer(hnsw_data->data_level0_buffer, hnsw_data->data_level0_size);
+            serializeLengthToBuffer(hnsw_data->length_buffer, hnsw_data->length_size);
+            serializeLinkListsToBuffer(hnsw_data->link_list_buffer, hnsw_data->link_list_size);
+            
+            return hnsw_data;
+        }
+
+        void readPersistedIndexFromStreams(SpaceInterface<dist_t> *s, 
+                                           InputPersistenceStreams& input_streams,
+                                           size_t max_elements_i = 0)
         {
-            std::ifstream input_header(this->getHeaderLocation(), std::ios::binary);
-            if (!input_header.is_open())
-                throw std::runtime_error("Cannot open header file");
+            auto& input_header = *input_streams.header_stream;
+            auto& input_data_level0 = *input_streams.data_level0_stream;
+            auto& input_length = *input_streams.length_stream;
+            auto& input_link_list = *input_streams.link_list_stream;
+            
+            if (!input_header.good())
+                throw std::runtime_error("Header stream is not in good state");
 
             // Read the header
             int persisted_version;
@@ -1006,49 +1249,90 @@ namespace hnswlib
             readBinaryPOD(input_header, M_);
             readBinaryPOD(input_header, mult_);
             readBinaryPOD(input_header, ef_construction_);
-            input_header.close();
 
             data_size_ = s->get_data_size();
             fstdistfunc_ = s->get_dist_func();
             dist_func_param_ = s->get_dist_func_param();
 
             // Read data_level0_memory_
-            std::ifstream input_data_level0(this->getDataLevel0Location(), std::ios::binary);
-            if (!input_data_level0.is_open())
-                throw std::runtime_error("Cannot open data_level0 file");
+            if (!input_data_level0.good())
+                throw std::runtime_error("Data level0 stream is not in good state");
 
             data_level0_memory_ = (char *)malloc(max_elements * size_data_per_element_);
             if (data_level0_memory_ == nullptr)
                 throw std::runtime_error("Not enough memory: loadPersistedIndex failed to allocate level0");
             input_data_level0.read(data_level0_memory_, max_elements * size_data_per_element_);
-            input_data_level0.close();
 
             // Read length_memory_
-            std::ifstream input_length(this->getLengthLocation(), std::ios::binary);
-            if (!input_length.is_open())
-                throw std::runtime_error("Cannot open length file");
+            if (!input_length.good())
+                throw std::runtime_error("Length stream is not in good state");
 
             length_memory_ = (char *)malloc(max_elements * sizeof(float));
             if (length_memory_ == nullptr)
                 throw std::runtime_error("Not enough memory: loadPersistedIndex failed to allocate length_memory_");
             input_length.read(length_memory_, max_elements * sizeof(float));
-            input_length.close();
 
             // Read the linkLists
+            if (!input_link_list.good())
+                throw std::runtime_error("Link list stream is not in good state");
+            loadLinkLists(input_link_list);
+
+            loadDeleted();
+            return;
+        }
+
+        void loadPersistedIndex(SpaceInterface<dist_t> *s, size_t max_elements_i = 0)
+        {
+            std::ifstream input_header(this->getHeaderLocation(), std::ios::binary);
+            if (!input_header.is_open())
+                throw std::runtime_error("Cannot open header file");
+
+            std::ifstream input_data_level0(this->getDataLevel0Location(), std::ios::binary);
+            if (!input_data_level0.is_open())
+                throw std::runtime_error("Cannot open data_level0 file");
+
+            std::ifstream input_length(this->getLengthLocation(), std::ios::binary);
+            if (!input_length.is_open())
+                throw std::runtime_error("Cannot open length file");
+
             std::ifstream input_link_list(this->getLinkListLocation(), std::ios::binary);
             if (!input_link_list.is_open())
                 throw std::runtime_error("Cannot open link list file");
-            loadLinkLists(input_link_list);
-            input_link_list.close();
 
-            loadDeleted();
+            {
+                InputPersistenceStreams input_streams = {
+                    std::make_shared<std::ifstream>(std::move(input_header)),
+                    std::make_shared<std::ifstream>(std::move(input_data_level0)),
+                    std::make_shared<std::ifstream>(std::move(input_length)),
+                    std::make_shared<std::ifstream>(std::move(input_link_list))
+                };
+
+                readPersistedIndexFromStreams(s, input_streams, max_elements_i);
+            }
 
             openPersistentIndex();
-            return;
         }
+
+        void loadPersistedIndexFromMemory(SpaceInterface<dist_t> *s,
+                                          const HnswDataView &buffers,
+                                          size_t max_elements_i = 0)
+        {   
+            // This function expects null-terminated C-style strings as per the memory
+            // Create streams from the extracted data
+
+            InputPersistenceStreams input_streams = {
+                std::make_shared<memistream>(buffers.header_buffer, buffers.header_size),
+                std::make_shared<memistream>(buffers.data_level0_buffer, buffers.data_level0_size),
+                std::make_shared<memistream>(buffers.length_buffer, buffers.length_size),
+                std::make_shared<memistream>(buffers.link_list_buffer, buffers.link_list_size)
+            };
+            
+            readPersistedIndexFromStreams(s, input_streams, max_elements_i);
+        }
+
         // #pragma endregion
 
-        void loadLinkLists(std::ifstream &input_link_list)
+        void loadLinkLists(std::istream &input_link_list)
         {
             // Init link lists / visited lists pool
             size_links_per_element_ = maxM_ * sizeof(tableint) + sizeof(linklistsizeint);
