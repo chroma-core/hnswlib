@@ -105,8 +105,8 @@ pub enum HnswError {
     FFIException(String),
     #[error(transparent)]
     ErrorStringRead(#[from] Utf8Error),
-    #[error("Failed to create HnswData structure")]
-    ErrorHnswData,
+    #[error("HnswDataError: `{0}`")]
+    ErrorHnswData(String)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -406,21 +406,6 @@ pub struct HnswData {
 unsafe impl Sync for HnswData {}
 unsafe impl Send for HnswData {}
 
-impl Default for HnswData {
-    // Only used for testing
-    fn default() -> Self {
-        let empty_buffer = std::sync::Arc::new(Vec::new());
-        Self {
-            ffi_ptr: std::ptr::null(),
-            _marker: std::marker::PhantomData,
-            header_buffer: empty_buffer.clone(),
-            data_level0_buffer: empty_buffer.clone(),
-            length_buffer: empty_buffer.clone(),
-            link_list_buffer: empty_buffer.clone(),
-        }
-    }
-}
-
 impl HnswData {
     /// Create new HnswData with Rust-managed buffers from index serialization
     fn new_from_index(
@@ -461,7 +446,7 @@ impl HnswData {
     }
 
     /// Create new HnswData from existing Arc buffer pointers
-    pub fn new_from_buffers(
+    fn new_from_buffers(
         header_buffer: std::sync::Arc<Vec<u8>>,
         data_level0_buffer: std::sync::Arc<Vec<u8>>,
         length_buffer: std::sync::Arc<Vec<u8>>,
@@ -470,7 +455,7 @@ impl HnswData {
         // Create HnswData FFI structure and set the buffers
         let ffi_ptr = unsafe { create_hnsw_data_view(header_buffer.as_ptr(), header_buffer.len(), data_level0_buffer.as_ptr(), data_level0_buffer.len(), length_buffer.as_ptr(), length_buffer.len(), link_list_buffer.as_ptr(), link_list_buffer.len()) };
         if ffi_ptr.is_null() {
-            return Err(HnswError::ErrorHnswData);
+            return Err(HnswError::ErrorHnswData("Failed to create HnswData structure".to_string()));
         }
         
         Ok(HnswData {
@@ -501,6 +486,100 @@ impl HnswData {
     /// Get the link list buffer as a byte slice
     pub fn link_list_buffer(&self) -> &[u8] {
         &self.link_list_buffer
+    }
+
+    /// Create a new HnswDataBuilder for safe construction
+    pub fn builder() -> HnswDataBuilder {
+        HnswDataBuilder::new()
+    }
+}
+
+/// Builder for safely constructing HnswData instances
+pub struct HnswDataBuilder {
+    header_buffer: Option<std::sync::Arc<Vec<u8>>>,
+    data_level0_buffer: Option<std::sync::Arc<Vec<u8>>>,
+    length_buffer: Option<std::sync::Arc<Vec<u8>>>,
+    link_list_buffer: Option<std::sync::Arc<Vec<u8>>>,
+}
+
+impl HnswDataBuilder {
+    pub fn new() -> Self {
+        Self {
+            header_buffer: None,
+            data_level0_buffer: None,
+            length_buffer: None,
+            link_list_buffer: None,
+        }
+    }
+
+    pub fn header_buffer(mut self, buffer: std::sync::Arc<Vec<u8>>) -> Self {
+        self.header_buffer = Some(buffer);
+        self
+    }
+
+    pub fn data_level0_buffer(mut self, buffer: std::sync::Arc<Vec<u8>>) -> Self {
+        self.data_level0_buffer = Some(buffer);
+        self
+    }
+    
+    pub fn length_buffer(mut self, buffer: std::sync::Arc<Vec<u8>>) -> Self {
+        self.length_buffer = Some(buffer);
+        self
+    }
+
+    pub fn link_list_buffer(mut self, buffer: std::sync::Arc<Vec<u8>>) -> Self {
+        self.link_list_buffer = Some(buffer);
+        self
+    }
+
+    /// Validate that all required buffers are set and non-empty
+    fn validate(&self) -> Result<(), HnswError> {
+        if self.header_buffer.is_none() {
+            return Err(HnswError::ErrorHnswData("Header buffer is required".to_string()));
+        }
+        if self.data_level0_buffer.is_none() {
+            return Err(HnswError::ErrorHnswData("Data level0 buffer is required".to_string()));
+        }
+        if self.length_buffer.is_none() {
+            return Err(HnswError::ErrorHnswData("Length buffer is required".to_string()));
+        }
+        if self.link_list_buffer.is_none() {
+            return Err(HnswError::ErrorHnswData("Link list buffer is required".to_string()));
+        }
+
+        // Check that buffers are not empty
+        if self.header_buffer.as_ref().unwrap().is_empty() {
+            return Err(HnswError::ErrorHnswData("Header buffer cannot be empty".to_string()));
+        }
+        if self.data_level0_buffer.as_ref().unwrap().is_empty() {
+            return Err(HnswError::ErrorHnswData("Data level0 buffer cannot be empty".to_string()));
+        }
+        if self.length_buffer.as_ref().unwrap().is_empty() {
+            return Err(HnswError::ErrorHnswData("Length buffer cannot be empty".to_string()));
+        }
+        if self.link_list_buffer.as_ref().unwrap().is_empty() {
+            return Err(HnswError::ErrorHnswData("Link list buffer cannot be empty".to_string()));
+        }
+
+        Ok(())
+    }
+
+    /// Build the HnswData instance after validating all buffers are set
+    pub fn build(self) -> Result<HnswData, HnswError> {
+        self.validate()?;
+
+        HnswData::new_from_buffers(
+            self.header_buffer.unwrap(),
+            self.data_level0_buffer.unwrap(),
+            self.length_buffer.unwrap(),
+            self.link_list_buffer.unwrap(),
+        )
+    }
+}
+
+impl Default for HnswDataBuilder {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -856,8 +935,12 @@ pub mod test {
             src_buffers.push(Arc::new(data));
         }
 
-        let hnsw_data = HnswData::new_from_buffers(src_buffers[0].clone(), src_buffers[1].clone(),
-        src_buffers[2].clone(), src_buffers[3].clone());
+        let hnsw_data = HnswDataBuilder::new()
+            .header_buffer(src_buffers[0].clone())
+            .data_level0_buffer(src_buffers[1].clone())
+            .length_buffer(src_buffers[2].clone())
+            .link_list_buffer(src_buffers[3].clone())
+            .build();
 
         let index = HnswIndex::load_from_hnsw_data(HnswIndexLoadConfig {
             distance_function,
