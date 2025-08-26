@@ -557,9 +557,8 @@ impl HnswDataBuilder {
         if self.length_buffer.as_ref().unwrap().is_empty() {
             return Err(HnswError::ErrorHnswData("Length buffer cannot be empty".to_string()));
         }
-        if self.link_list_buffer.as_ref().unwrap().is_empty() {
-            return Err(HnswError::ErrorHnswData("Link list buffer cannot be empty".to_string()));
-        }
+
+        // It's ok for link list buffer to be empty in an empty index.
 
         Ok(())
     }
