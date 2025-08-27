@@ -145,13 +145,12 @@ pub struct HnswIndex {
 unsafe impl Sync for HnswIndex {}
 unsafe impl Send for HnswIndex {}
 
-pub const DEFAULT_MAX_ELEMENTS: usize = 10000;
-
 pub struct HnswIndexLoadConfig {
     pub distance_function: HnswDistanceFunction,
     pub dimensionality: i32,
     pub persist_path: PathBuf,
     pub ef_search: usize,
+    pub max_elements: usize,
 }
 
 pub struct HnswIndexInitConfig {
@@ -224,7 +223,7 @@ impl HnswIndex {
         let path = CString::new(path).map_err(|e| HnswInitError::InvalidPath(e.to_string()))?;
 
         unsafe {
-            load_index(ffi_ptr, path.as_ptr(), true, true, DEFAULT_MAX_ELEMENTS);
+            load_index(ffi_ptr, path.as_ptr(), true, true, config.max_elements);
         }
         read_and_return_hnsw_error(ffi_ptr)?;
 
@@ -378,7 +377,7 @@ impl HnswIndex {
         read_and_return_hnsw_error(ffi_ptr)?;
 
         unsafe {
-            load_index_from_hnsw_data(ffi_ptr, load_data.ffi_ptr, DEFAULT_MAX_ELEMENTS);
+            load_index_from_hnsw_data(ffi_ptr, load_data.ffi_ptr, config.max_elements);
         }
         read_and_return_hnsw_error(ffi_ptr)?;
 
@@ -864,6 +863,7 @@ pub mod test {
             dimensionality: d as i32,
             persist_path: persist_path.to_path_buf(),
             ef_search: 100,
+            max_elements: 100,
         });
 
         let index = match index {
@@ -946,6 +946,7 @@ pub mod test {
             dimensionality: d as i32,
             persist_path: "".into(),
             ef_search: 100,
+            max_elements: 100,
         }, hnsw_data.expect("Failed to create HnswData"));
 
         let index = match index {
@@ -1018,6 +1019,7 @@ pub mod test {
                 dimensionality: d as i32,
                 persist_path: "".into(),
                 ef_search: 100,
+                max_elements: 100,
             },
             hnsw_data,
         ).expect("Failed to load from memory buffers");
@@ -1223,6 +1225,7 @@ pub mod test {
             dimensionality: d as i32,
             persist_path: persist_path.to_path_buf(),
             ef_search: 100,
+            max_elements: 100,
         });
 
         assert!(index.is_err());
