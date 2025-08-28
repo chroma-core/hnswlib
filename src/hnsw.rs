@@ -145,8 +145,6 @@ pub struct HnswIndex {
 unsafe impl Sync for HnswIndex {}
 unsafe impl Send for HnswIndex {}
 
-pub const DEFAULT_MAX_ELEMENTS: usize = 10000;
-
 pub struct HnswIndexLoadConfig {
     pub distance_function: HnswDistanceFunction,
     pub dimensionality: i32,
@@ -224,7 +222,7 @@ impl HnswIndex {
         let path = CString::new(path).map_err(|e| HnswInitError::InvalidPath(e.to_string()))?;
 
         unsafe {
-            load_index(ffi_ptr, path.as_ptr(), true, true, DEFAULT_MAX_ELEMENTS);
+            load_index(ffi_ptr, path.as_ptr(), true, true, 0);
         }
         read_and_return_hnsw_error(ffi_ptr)?;
 
@@ -378,7 +376,7 @@ impl HnswIndex {
         read_and_return_hnsw_error(ffi_ptr)?;
 
         unsafe {
-            load_index_from_hnsw_data(ffi_ptr, load_data.ffi_ptr, DEFAULT_MAX_ELEMENTS);
+            load_index_from_hnsw_data(ffi_ptr, load_data.ffi_ptr, 0);
         }
         read_and_return_hnsw_error(ffi_ptr)?;
 
