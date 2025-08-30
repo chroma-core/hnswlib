@@ -11,6 +11,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .flag("-fPIC")
         .flag("-ftree-vectorize")
         .flag("-w")
+        .flag("-march=native")
         .compile("bindings");
 
     Ok(())
