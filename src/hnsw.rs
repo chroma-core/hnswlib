@@ -152,6 +152,12 @@ pub struct HnswIndexLoadConfig {
     pub ef_search: usize,
 }
 
+pub struct HnswIndexMemoryLoadConfig {
+    pub distance_function: HnswDistanceFunction,
+    pub dimensionality: i32,
+    pub ef_search: usize,
+}
+
 pub struct HnswIndexInitConfig {
     pub distance_function: HnswDistanceFunction,
     pub dimensionality: i32,
@@ -367,7 +373,7 @@ impl HnswIndex {
     }
 
     /// Load index from memory buffers
-    pub fn load_from_hnsw_data(config: HnswIndexLoadConfig, load_data: HnswData) -> Result<Self, HnswInitError> {
+    pub fn load_from_hnsw_data(config: HnswIndexMemoryLoadConfig, load_data: HnswData) -> Result<Self, HnswInitError> {
         let distance_function_string: String = config.distance_function.into();
         let space_name = CString::new(distance_function_string)
             .map_err(|e| HnswInitError::InvalidDistanceFunction(e.to_string()))?;
@@ -939,10 +945,9 @@ pub mod test {
             .link_list_buffer(src_buffers[3].clone())
             .build();
 
-        let index = HnswIndex::load_from_hnsw_data(HnswIndexLoadConfig {
+        let index = HnswIndex::load_from_hnsw_data(HnswIndexMemoryLoadConfig {
             distance_function,
             dimensionality: d as i32,
-            persist_path: "".into(),
             ef_search: 100,
         }, hnsw_data.expect("Failed to create HnswData"));
 
@@ -1011,10 +1016,9 @@ pub mod test {
 
         // Create new index from memory buffers
         let loaded_index = HnswIndex::load_from_hnsw_data(
-            HnswIndexLoadConfig {
+            HnswIndexMemoryLoadConfig {
                 distance_function,
                 dimensionality: d as i32,
-                persist_path: "".into(),
                 ef_search: 100,
             },
             hnsw_data,
