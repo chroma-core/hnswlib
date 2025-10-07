@@ -373,7 +373,7 @@ impl HnswIndex {
     }
 
     /// Load index from memory buffers
-    pub fn load_from_hnsw_data(config: HnswIndexMemoryLoadConfig, load_data: HnswData) -> Result<Self, HnswInitError> {
+    pub fn load_from_hnsw_data(config: HnswIndexMemoryLoadConfig, load_data: &HnswData) -> Result<Self, HnswInitError> {
         let distance_function_string: String = config.distance_function.into();
         let space_name = CString::new(distance_function_string)
             .map_err(|e| HnswInitError::InvalidDistanceFunction(e.to_string()))?;
@@ -949,7 +949,7 @@ pub mod test {
             distance_function,
             dimensionality: d as i32,
             ef_search: 100,
-        }, hnsw_data.expect("Failed to create HnswData"));
+        }, &hnsw_data.expect("Failed to create HnswData"));
 
         let index = match index {
             Err(e) => panic!("Error loading index: {}", e),
@@ -1021,7 +1021,7 @@ pub mod test {
                 dimensionality: d as i32,
                 ef_search: 100,
             },
-            hnsw_data,
+            &hnsw_data,
         ).expect("Failed to load from memory buffers");
 
         // Verify loaded index has same data
