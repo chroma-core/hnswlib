@@ -2131,10 +2131,11 @@ namespace hnswlib
             }
             if (cur_element_count > 1)
             {
-                int min1 = inbound_connections_num[0], max1 = inbound_connections_num[0];
+                int min1 = INT_MAX, max1 = 0;
                 for (int i = 0; i < cur_element_count; i++)
                 {
-                    // This should always be true regardless the data is corrupted or not
+                    if (isMarkedDeleted(i))
+                        continue;
                     assert(inbound_connections_num[i] > 0);
                     min1 = std::min(inbound_connections_num[i], min1);
                     max1 = std::max(inbound_connections_num[i], max1);
