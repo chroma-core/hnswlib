@@ -62,5 +62,7 @@ if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
 
     add_executable(api_tests tests/cpp/api_test.cpp)
     target_link_libraries(api_tests hnswlib)
-endif()
 
+    add_executable(integrity_test tests/cpp/integrity_test.cpp)
+    target_link_libraries(integrity_test hnswlib)
+endif()
