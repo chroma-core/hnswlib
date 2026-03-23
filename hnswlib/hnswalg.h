@@ -12,6 +12,7 @@
 #include <string>
 #include <unordered_set>
 #include <set>
+#include <climits>
 #include <cstring>
 
 namespace hnswlib
