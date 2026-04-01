@@ -31,6 +31,7 @@ pub struct DataViewFFI {
 #[link(name = "bindings", kind = "static")]
 extern "C" {
     fn create_index(space_name: *const c_char, dim: c_int) -> *const HnswIndexPtrFFI;
+    fn create_index_quantized(space_name: *const c_char, dim: c_int, quantization_bits: c_int) -> *const HnswIndexPtrFFI;
 
     fn free_index(index: *const HnswIndexPtrFFI);
 
@@ -193,6 +194,7 @@ pub struct HnswIndexInitConfig {
     pub ef_construction: usize,
     pub ef_search: usize,
     pub random_seed: usize,
+    pub quantization_bits: i32,  // 0 = no quantization, 4 = TurboQuant 4-bit
 }
 
 impl HnswIndex {
@@ -201,7 +203,11 @@ impl HnswIndex {
         let space_name = CString::new(distance_function_string)
             .map_err(|e| HnswInitError::InvalidDistanceFunction(e.to_string()))?;
 
-        let ffi_ptr = unsafe { create_index(space_name.as_ptr(), config.dimensionality) };
+        let ffi_ptr = if config.quantization_bits > 0 {
+            unsafe { create_index_quantized(space_name.as_ptr(), config.dimensionality, config.quantization_bits) }
+        } else {
+            unsafe { create_index(space_name.as_ptr(), config.dimensionality) }
+        };
         read_and_return_hnsw_error(ffi_ptr)?;
 
         let path = match config.persist_path.clone() {

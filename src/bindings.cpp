@@ -1,6 +1,7 @@
 // Assumes that chroma-hnswlib is checked out at the same level as chroma
 #include "../hnswlib/hnswlib.h"
 #include "../hnswlib/hnswalg.h"
+#include "../hnswlib/turbo_quant.h"
 
 class AllowAndDisallowListFilterFunctor : public hnswlib::BaseFilterFunctor
 {
@@ -44,23 +45,53 @@ public:
   hnswlib::HierarchicalNSW<dist_t> *appr_alg;
   hnswlib::SpaceInterface<float> *l2space;
 
-  Index(const std::string &space_name, const int dim) : space_name(space_name), dim(dim)
+  int quantization_bits;
+
+  Index(const std::string &space_name, const int dim, const int quant_bits = 0)
+      : space_name(space_name), dim(dim), quantization_bits(quant_bits)
   {
-    if (space_name == "l2")
+    if (quant_bits > 0)
     {
-      l2space = new hnswlib::L2Space(dim);
-      normalize = false;
+      // TurboQuant mode: use quantized space
+      if (space_name == "l2")
+      {
+        l2space = new hnswlib::TurboQuantL2Space(dim, quant_bits);
+        normalize = false;
+      }
+      else if (space_name == "ip")
+      {
+        l2space = new hnswlib::TurboQuantIPSpace(dim, quant_bits);
+        normalize = false;
+      }
+      else if (space_name == "cosine")
+      {
+        l2space = new hnswlib::TurboQuantIPSpace(dim, quant_bits);
+        normalize = true;
+      }
+      else
+      {
+        l2space = new hnswlib::TurboQuantL2Space(dim, quant_bits);
+        normalize = false;
+      }
     }
-    if (space_name == "ip")
+    else
     {
-      l2space = new hnswlib::InnerProductSpace(dim);
-      // For IP, we expect the vectors to be normalized
-      normalize = false;
-    }
-    if (space_name == "cosine")
-    {
-      l2space = new hnswlib::InnerProductSpace(dim);
-      normalize = true;
+      // Standard float32 mode
+      if (space_name == "l2")
+      {
+        l2space = new hnswlib::L2Space(dim);
+        normalize = false;
+      }
+      if (space_name == "ip")
+      {
+        l2space = new hnswlib::InnerProductSpace(dim);
+        normalize = false;
+      }
+      if (space_name == "cosine")
+      {
+        l2space = new hnswlib::InnerProductSpace(dim);
+        normalize = true;
+      }
     }
     appr_alg = NULL;
     index_inited = false;
@@ -84,6 +115,11 @@ public:
     }
     appr_alg = new hnswlib::HierarchicalNSW<dist_t>(l2space, max_elements, M, ef_construction, random_seed, allow_replace_deleted, normalize, is_persistent_index, persistence_location);
     appr_alg->ef_ = 10; // This is a default value for ef_
+    // If TurboQuant space, set the quantizer on the HNSW index.
+    // dist_func_param_ already points to the TurboQuantizer inside the space.
+    if (quantization_bits > 0) {
+        appr_alg->set_quantizer((hnswlib::TurboQuantizer*)l2space->get_dist_func_param());
+    }
     index_inited = true;
   }
 
@@ -291,6 +327,22 @@ extern "C"
     }
     last_error.clear();
     return new Index<float>(space_name, dim);
+  }
+
+  // Create index with TurboQuant quantization
+  Index<float> *create_index_quantized(const char *space_name, const int dim, const int quantization_bits)
+  {
+    try
+    {
+      auto* index = new Index<float>(space_name, dim, quantization_bits);
+      last_error.clear();
+      return index;
+    }
+    catch (std::exception &e)
+    {
+      last_error = e.what();
+      return nullptr;
+    }
   }
 
   void free_index(Index<float> *index)
