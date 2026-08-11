@@ -1350,11 +1350,24 @@ namespace hnswlib
             element_levels_ = std::vector<int>(max_elements_);
             revSize_ = 1.0 / mult_;
             ef_ = 10;
+            // Every record holds size_links_per_element_ bytes per level and no element
+            // sits above maxlevel_, so this is the largest record the file can hold.
+            const size_t max_link_list_size = maxlevel_ > 0 ? size_links_per_element_ * (size_t)maxlevel_ : 0;
             for (size_t i = 0; i < cur_element_count; i++)
             {
                 label_lookup_[getExternalLabel(i)] = i;
-                unsigned int linkListSize;
+                unsigned int linkListSize = 0;
                 readBinaryPOD(input_link_list, linkListSize);
+                if (input_link_list.gcount() != (std::streamsize)sizeof(linkListSize))
+                    throw std::runtime_error("Link lists are truncated: no record for element " + std::to_string(i));
+                // A size that is not a whole number of levels, or that implies a level above
+                // maxlevel_, means we are no longer reading on a record boundary, so every
+                // later element would get a garbage level as well. persistDirty() turns those
+                // levels into seek strides, which grows the file without bound.
+                if (linkListSize % size_links_per_element_ != 0 || linkListSize > max_link_list_size)
+                    throw std::runtime_error("Link lists are corrupt: element " + std::to_string(i) + " declares " +
+                                             std::to_string(linkListSize) + " bytes of links, at most " +
+                                             std::to_string(max_link_list_size) + " expected");
                 if (linkListSize == 0)
                 {
                     element_levels_[i] = 0;
@@ -1367,6 +1380,9 @@ namespace hnswlib
                     if (linkLists_[i] == nullptr)
                         throw std::runtime_error("Not enough memory: loadIndex failed to allocate linklist");
                     input_link_list.read(linkLists_[i], linkListSize);
+                    if (input_link_list.gcount() != (std::streamsize)linkListSize)
+                        throw std::runtime_error("Link lists are truncated: element " + std::to_string(i) +
+                                                 " record is incomplete");
                 }
             }
         }
