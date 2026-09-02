@@ -1221,7 +1221,18 @@ namespace hnswlib
         // the layout and refuse a header that disagrees.
         void checkPersistedLayout(size_t max_elements) const
         {
+            // maxM0_ and data_size_ feed the derivation, and maxM0_ is itself
+            // read from the header, so the arithmetic that recomputes the
+            // layout has to be guarded too: a wrapped product would otherwise
+            // produce a small "expected" value that a crafted header matches.
+            const size_t size_limit = std::numeric_limits<size_t>::max();
+            if (maxM0_ > (size_limit - sizeof(linklistsizeint)) / sizeof(tableint))
+                throw std::runtime_error("Cannot load index: maxM0 in the header is too large to describe an element layout");
             const size_t expected_links_level0 = maxM0_ * sizeof(tableint) + sizeof(linklistsizeint);
+            if (expected_links_level0 > size_limit - data_size_)
+                throw std::runtime_error("Cannot load index: maxM0 and the space data size overflow the element layout");
+            if (expected_links_level0 + data_size_ > size_limit - sizeof(labeltype))
+                throw std::runtime_error("Cannot load index: maxM0 and the space data size overflow the element layout");
             const size_t expected_size_data_per_element = expected_links_level0 + data_size_ + sizeof(labeltype);
             if (size_data_per_element_ != expected_size_data_per_element)
                 throw std::runtime_error("Cannot load index: size_data_per_element in the header does not match the space and graph parameters");
@@ -1443,6 +1454,9 @@ namespace hnswlib
             fstdistfunc_ = s->get_dist_func();
             dist_func_param_ = s->get_dist_func_param();
 
+            // Before the scan below, which seeks using size_data_per_element_.
+            checkPersistedLayout(max_elements);
+
             auto pos = input.tellg();
 
             /// Optional - check if index is ok:
@@ -1470,8 +1484,6 @@ namespace hnswlib
             /// Optional check end
 
             input.seekg(pos, input.beg);
-
-            checkPersistedLayout(max_elements);
 
             data_level0_memory_ = (char *)malloc(max_elements * size_data_per_element_);
             if (data_level0_memory_ == nullptr)

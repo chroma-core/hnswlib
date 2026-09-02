@@ -5,12 +5,17 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <limits>
+#include <stdexcept>
 
 namespace
 {
     // size_data_per_element_ is the fifth header field, after the version and
     // three size_t fields (offsetLevel0_, max_elements_, cur_element_count).
     const std::streamoff kSizeDataPerElementOffset = sizeof(int) + 3 * sizeof(size_t);
+    // maxM0_ is the eleventh header field: version, seven size_t, int, tableint,
+    // then maxM_ before it.
+    const std::streamoff kMaxM0Offset = sizeof(int) + 7 * sizeof(size_t) + sizeof(int) + sizeof(hnswlib::tableint);
     const int kDim = 8;
     const size_t kCount = 16;
 
@@ -39,13 +44,19 @@ namespace
         index.persistDirty();
     }
 
-    void overwriteSizeDataPerElement(const std::string &dir, size_t value)
+    void writeHeaderField(const std::string &dir, std::streamoff offset, size_t value)
     {
-        std::fstream header((dir + "/header.bin").c_str(),
-                            std::ios::binary | std::ios::in | std::ios::out);
-        header.seekp(kSizeDataPerElementOffset, std::ios::beg);
+        const std::string path = dir + "/header.bin";
+        std::fstream header(path.c_str(), std::ios::binary | std::ios::in | std::ios::out);
+        if (!header.is_open())
+            throw std::runtime_error("test setup: cannot open " + path);
+        header.seekp(offset, std::ios::beg);
+        if (!header.good())
+            throw std::runtime_error("test setup: cannot seek in " + path);
         header.write(reinterpret_cast<const char *>(&value), sizeof(value));
         header.flush();
+        if (!header.good())
+            throw std::runtime_error("test setup: cannot write to " + path);
     }
 
     // True only when the load was refused by the layout check. A failed malloc
@@ -61,7 +72,10 @@ namespace
         catch (const std::runtime_error &e)
         {
             std::cout << "    rejected: " << e.what() << std::endl;
-            return std::string(e.what()).find("does not match the space and graph parameters") != std::string::npos;
+            // "Cannot load index:" is the layout check. A failed allocation
+            // reports "Not enough memory:", which is what unfixed code does and
+            // must not be accepted here.
+            return std::string(e.what()).find("Cannot load index:") == 0;
         }
         return false;
     }
@@ -71,12 +85,18 @@ namespace
         const std::string dir = ".";
 
         buildPersistedIndex(dir);
-        overwriteSizeDataPerElement(dir, static_cast<size_t>(0xFFFFFFFFFFFF0000ULL));
+        writeHeaderField(dir, kSizeDataPerElementOffset, static_cast<size_t>(0xFFFFFFFFFFFF0000ULL));
         check(rejectedByLayoutCheck(dir), "wrapping size_data_per_element is refused");
 
         buildPersistedIndex(dir);
-        overwriteSizeDataPerElement(dir, static_cast<size_t>(1) << 30);
+        writeHeaderField(dir, kSizeDataPerElementOffset, static_cast<size_t>(1) << 30);
         check(rejectedByLayoutCheck(dir), "oversized size_data_per_element is refused");
+
+        // maxM0_ is read from the header too, so the recomputation itself must
+        // not wrap into a small "expected" value that the header then matches.
+        buildPersistedIndex(dir);
+        writeHeaderField(dir, kMaxM0Offset, std::numeric_limits<size_t>::max() / 2);
+        check(rejectedByLayoutCheck(dir), "wrapping maxM0 is refused");
     }
 
     void testUntouchedHeaderStillLoads()
