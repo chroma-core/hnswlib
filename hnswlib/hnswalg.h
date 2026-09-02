@@ -13,6 +13,7 @@
 #include <unordered_set>
 #include <set>
 #include <climits>
+#include <limits>
 #include <cstring>
 
 namespace hnswlib
@@ -1212,6 +1213,26 @@ namespace hnswlib
             return hnsw_data;
         }
 
+        // The element layout in a persisted header is derived, not free-form:
+        // it follows from the space's data size and the graph's maxM0_. Both
+        // load paths allocate `max_elements * size_data_per_element_` straight
+        // from the header before reading a single byte of data, so a crafted
+        // value there is an allocation of any size the file asks for. Recompute
+        // the layout and refuse a header that disagrees.
+        void checkPersistedLayout(size_t max_elements) const
+        {
+            const size_t expected_links_level0 = maxM0_ * sizeof(tableint) + sizeof(linklistsizeint);
+            const size_t expected_size_data_per_element = expected_links_level0 + data_size_ + sizeof(labeltype);
+            if (size_data_per_element_ != expected_size_data_per_element)
+                throw std::runtime_error("Cannot load index: size_data_per_element in the header does not match the space and graph parameters");
+            if (offsetData_ != expected_links_level0)
+                throw std::runtime_error("Cannot load index: offsetData in the header does not match the space and graph parameters");
+            if (label_offset_ != expected_links_level0 + data_size_)
+                throw std::runtime_error("Cannot load index: label_offset in the header does not match the space and graph parameters");
+            if (size_data_per_element_ != 0 && max_elements > std::numeric_limits<size_t>::max() / size_data_per_element_)
+                throw std::runtime_error("Cannot load index: max_elements times size_data_per_element overflows");
+        }
+
         void readPersistedIndexFromStreams(SpaceInterface<dist_t> *s, 
                                            InputPersistenceStreams& input_streams,
                                            size_t max_elements_i = 0)
@@ -1258,6 +1279,8 @@ namespace hnswlib
             // Read data_level0_memory_
             if (!input_data_level0.good())
                 throw std::runtime_error("Data level0 stream is not in good state");
+
+            checkPersistedLayout(max_elements);
 
             data_level0_memory_ = (char *)malloc(max_elements * size_data_per_element_);
             if (data_level0_memory_ == nullptr)
@@ -1447,6 +1470,8 @@ namespace hnswlib
             /// Optional check end
 
             input.seekg(pos, input.beg);
+
+            checkPersistedLayout(max_elements);
 
             data_level0_memory_ = (char *)malloc(max_elements * size_data_per_element_);
             if (data_level0_memory_ == nullptr)
