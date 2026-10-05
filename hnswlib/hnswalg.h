@@ -944,29 +944,22 @@ namespace hnswlib
         // #pragma region PersistentIndex
         void setupPersistentIndexFileHandles()
         {
-            this->output_header_ = std::ofstream(this->getHeaderLocation(), std::ios::in | std::ios::out | std::ios::binary);
-            if (!this->output_header_.is_open())
-            {
-                std::runtime_error("Cannot open file: " + this->getHeaderLocation());
-            }
-
-            this->output_data_level0_ = std::ofstream(this->getDataLevel0Location(), std::ios::in | std::ios::out | std::ios::binary);
-            if (!this->output_data_level0_.is_open())
-            {
-                std::runtime_error("Cannot open file: " + this->getDataLevel0Location());
-            }
-
-            this->output_length_ = std::ofstream(this->getLengthLocation(), std::ios::in | std::ios::out | std::ios::binary);
-            if (!this->output_length_.is_open())
-            {
-                std::runtime_error("Cannot open file: " + this->getLengthLocation());
-            }
-
-            this->output_link_lists_ = std::ofstream(this->getLinkListLocation(), std::ios::in | std::ios::out | std::ios::binary);
-            if (!this->output_link_lists_.is_open())
-            {
-                std::runtime_error("Cannot open file: " + this->getLinkListLocation());
-            }
+            // Publish the open state only after all four streams are usable.
+            // Locals close already-opened files automatically if a later open fails.
+            auto open = [](const std::string &path) {
+                std::ofstream stream(path, std::ios::in | std::ios::out | std::ios::binary);
+                if (!stream.is_open())
+                    throw std::runtime_error("Cannot open file: " + path);
+                return stream;
+            };
+            auto header = open(getHeaderLocation());
+            auto data = open(getDataLevel0Location());
+            auto length = open(getLengthLocation());
+            auto links = open(getLinkListLocation());
+            output_header_ = std::move(header);
+            output_data_level0_ = std::move(data);
+            output_length_ = std::move(length);
+            output_link_lists_ = std::move(links);
         }
 
         void closePersistentIndexFileHandles()
@@ -1115,7 +1108,14 @@ namespace hnswlib
             }
             this->output_link_lists_.flush();
 
-            // Note: It would make sense to do a fsync here
+            if (!output_header_.good() || !output_data_level0_.good() ||
+                !output_length_.good() || !output_link_lists_.good())
+            {
+                // Preserve every dirty element and reopen clean streams on retry.
+                closePersistentIndex();
+                throw std::runtime_error("Failed to persist HNSW index");
+            }
+            // Durability (fsync) is the caller's responsibility.
             elements_to_persist_.clear();
         }
 
@@ -1721,6 +1721,9 @@ namespace hnswlib
             }
             // update the feature vector associated with existing point with new vector
             memcpy(getDataByInternalId(internalId), newPoint, data_size_);
+            // Isolated points may return without updating any graph links.
+            // Both the vector and its normalization length still need saving.
+            markElementToPersist(internalId);
 
             int maxLevelCopy = maxlevel_;
             tableint entryPointCopy = enterpoint_node_;
