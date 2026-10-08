@@ -297,8 +297,10 @@ impl HnswIndex {
         read_and_return_hnsw_error(self.ffi_ptr)
     }
 
-    pub fn open_fd(&self) {
+    /// Reopen persistent files, reporting failures without discarding dirty data.
+    pub fn open_fd(&self) -> Result<(), HnswError> {
         unsafe { open_fd(self.ffi_ptr) }
+        read_and_return_hnsw_error(self.ffi_ptr)
     }
 
     pub fn close_fd(&self) {
@@ -892,6 +894,102 @@ pub mod test {
                 assert!(!ids.contains(check_deleted_id));
             }
         }
+    }
+
+    fn persistence_fixture(path: &std::path::Path, space: HnswDistanceFunction) -> HnswIndex {
+        HnswIndex::init(HnswIndexInitConfig {
+            distance_function: space,
+            dimensionality: 3,
+            max_elements: 100,
+            m: 16,
+            ef_construction: 100,
+            ef_search: 100,
+            random_seed: 0,
+            persist_path: Some(path.to_path_buf()),
+        })
+        .unwrap()
+    }
+
+    fn reload_persistence_fixture(
+        path: &std::path::Path,
+        space: HnswDistanceFunction,
+    ) -> HnswIndex {
+        HnswIndex::load(HnswIndexLoadConfig {
+            distance_function: space,
+            dimensionality: 3,
+            persist_path: path.to_path_buf(),
+            ef_search: 100,
+        })
+        .unwrap()
+    }
+
+    #[test]
+    fn persistence_updates_isolated_vector() {
+        for space in [
+            HnswDistanceFunction::Euclidean,
+            HnswDistanceFunction::Cosine,
+        ] {
+            let dir = tempdir().unwrap();
+            let index = persistence_fixture(dir.path(), space);
+            index.add(1, &[1.0, 0.0, 0.0]).unwrap();
+            index.save().unwrap();
+            for i in 1..20 {
+                index.add(1, &[0.0, i as f32, 0.0]).unwrap();
+            }
+            assert_eq!(index.len_with_deleted(), 1);
+            index.save().unwrap();
+            index.close_fd();
+            drop(index);
+            let loaded = reload_persistence_fixture(dir.path(), space);
+            assert_eq!(loaded.get(1).unwrap().unwrap(), vec![0.0, 19.0, 0.0]);
+        }
+    }
+
+    #[test]
+    fn persistence_failed_reopen_preserves_pending_update() {
+        let dir = tempdir().unwrap();
+        let index = persistence_fixture(dir.path(), HnswDistanceFunction::Euclidean);
+        index.add(1, &[1.0; 3]).unwrap();
+        index.save().unwrap();
+        index.close_fd();
+        index.add(1, &[2.0; 3]).unwrap();
+        let file = dir.path().join("length.bin");
+        let backup = dir.path().join("length.backup");
+        std::fs::rename(&file, &backup).unwrap();
+        assert!(index.open_fd().is_err());
+        assert!(index.save().is_err());
+        std::fs::rename(&backup, &file).unwrap();
+        index.open_fd().unwrap();
+        index.save().unwrap();
+        index.close_fd();
+        drop(index);
+        let loaded = reload_persistence_fixture(dir.path(), HnswDistanceFunction::Euclidean);
+        assert_eq!(loaded.get(1).unwrap().unwrap(), vec![2.0; 3]);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn persistence_failed_write_preserves_pending_update() {
+        let dir = tempdir().unwrap();
+        let index = persistence_fixture(dir.path(), HnswDistanceFunction::Euclidean);
+        index.add(1, &[1.0; 3]).unwrap();
+        index.save().unwrap();
+        index.close_fd();
+        index.add(1, &[2.0; 3]).unwrap();
+        let file = dir.path().join("data_level0.bin");
+        let backup = dir.path().join("data_level0.backup");
+        std::fs::rename(&file, &backup).unwrap();
+        std::os::unix::fs::symlink("/dev/full", &file).unwrap();
+        index.open_fd().unwrap();
+        assert!(index.save().is_err());
+        std::fs::remove_file(&file).unwrap();
+        std::fs::rename(&backup, &file).unwrap();
+        index.open_fd().unwrap();
+        index.save().unwrap();
+        index.close_fd();
+        drop(index);
+        let loaded = reload_persistence_fixture(dir.path(), HnswDistanceFunction::Euclidean);
+        assert_eq!(loaded.get(1).unwrap().unwrap(), vec![2.0; 3]);
     }
 
     #[test]

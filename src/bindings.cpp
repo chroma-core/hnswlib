@@ -526,7 +526,16 @@ extern "C"
 
   void open_fd(Index<float> *index)
   {
-    index->open_fd();
+    try
+    {
+      index->open_fd();
+    }
+    catch (std::exception &e)
+    {
+      last_error = e.what();
+      return;
+    }
+    last_error.clear();
   }
 
   void close_fd(Index<float> *index)
