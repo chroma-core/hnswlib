@@ -60,6 +60,9 @@ if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
     add_executable(persistent_test tests/cpp/persistent_test.cpp)
     target_link_libraries(persistent_test hnswlib)
 
+    add_executable(replace_links_test tests/cpp/replace_links_test.cpp)
+    target_link_libraries(replace_links_test hnswlib)
+
     add_executable(api_tests tests/cpp/api_test.cpp)
     target_link_libraries(api_tests hnswlib)
 

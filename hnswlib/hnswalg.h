@@ -11,6 +11,7 @@
 #include <memory>
 #include <string>
 #include <unordered_set>
+#include <algorithm>
 #include <set>
 #include <climits>
 #include <cstring>
@@ -704,12 +705,36 @@ namespace hnswlib
             elements_to_persist_.insert(internal_id);
         }
 
+        // Writes a link list of an existing element during an update: the selected links first, then the links the list
+        // holds now, while there is room. The caller holds the lock of the list. An update must not drop a link it does
+        // not need to: it may be the last incoming link of another element, or one just added by another thread.
+        void mergeLinkList(linklistsizeint *ll, const std::vector<tableint> &selected, size_t maxSize)
+        {
+            tableint *data = (tableint *)(ll + 1);
+            size_t size = getListCount(ll);
+            // The links of the list that the selection does not hold, compacted in place.
+            size_t kept = 0;
+            for (size_t idx = 0; idx < size; idx++)
+            {
+                if (std::find(selected.begin(), selected.end(), data[idx]) == selected.end())
+                    data[kept++] = data[idx];
+            }
+            // The selection first (its ids are distinct), then those links, while there is room.
+            size_t first = std::min(selected.size(), maxSize);
+            kept = std::min(kept, maxSize - first);
+            memmove(data + first, data, kept * sizeof(tableint));
+            for (size_t idx = 0; idx < first; idx++)
+                data[idx] = selected[idx];
+            setListCount(ll, first + kept);
+        }
+
         tableint mutuallyConnectNewElement(
             const void *data_point,
             tableint cur_c,
             std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> &top_candidates,
             int level,
-            bool isUpdate)
+            bool isUpdate,
+            bool mergeElementLinks = true)
         {
 
             // mark cur_c as dirty
@@ -748,16 +773,34 @@ namespace hnswlib
                 {
                     throw std::runtime_error("The newly inserted element should have blank link list");
                 }
-                setListCount(ll_cur, selectedNeighbors.size());
-                tableint *data = (tableint *)(ll_cur + 1);
                 for (size_t idx = 0; idx < selectedNeighbors.size(); idx++)
                 {
-                    if (data[idx] && !isUpdate)
-                        throw std::runtime_error("Possible memory corruption");
                     if (level > element_levels_[selectedNeighbors[idx]])
                         throw std::runtime_error("Trying to make a link on a non-existent level");
-
-                    data[idx] = selectedNeighbors[idx];
+                }
+                if (isUpdate && mergeElementLinks)
+                {
+                    // Keep the links the element already has, while there is room.
+                    mergeLinkList(ll_cur, selectedNeighbors, Mcurmax);
+                }
+                else if (isUpdate)
+                {
+                    // A reused slot: the links of its old occupant do not belong to the new element.
+                    setListCount(ll_cur, selectedNeighbors.size());
+                    tableint *data = (tableint *)(ll_cur + 1);
+                    for (size_t idx = 0; idx < selectedNeighbors.size(); idx++)
+                        data[idx] = selectedNeighbors[idx];
+                }
+                else
+                {
+                    setListCount(ll_cur, selectedNeighbors.size());
+                    tableint *data = (tableint *)(ll_cur + 1);
+                    for (size_t idx = 0; idx < selectedNeighbors.size(); idx++)
+                    {
+                        if (data[idx])
+                            throw std::runtime_error("Possible memory corruption");
+                        data[idx] = selectedNeighbors[idx];
+                    }
                 }
             }
 
@@ -1702,11 +1745,13 @@ namespace hnswlib
                 lock_table.unlock();
 
                 unmarkDeletedInternal(internal_id_replaced);
-                updatePoint(data_point, internal_id_replaced, 1.0);
+                // The slot keeps the link lists of its old occupant: the new element must not take them as its own.
+                updatePoint(data_point, internal_id_replaced, 1.0, false);
             }
         }
 
-        void updatePoint(const void *dataPoint, tableint internalId, float updateNeighborProbability)
+        // keepElementLinks: false when the slot of a deleted element is reused, whose own links belong to the old element.
+        void updatePoint(const void *dataPoint, tableint internalId, float updateNeighborProbability, bool keepElementLinks = true)
         {
             const void *newPoint = dataPoint;
 
@@ -1790,23 +1835,24 @@ namespace hnswlib
                     // Retrieve neighbours using heuristic and set connections.
                     getNeighborsByHeuristic2(candidates, layer == 0 ? maxM0_ : maxM_);
 
+                    std::vector<tableint> selected;
+                    selected.reserve(candidates.size());
+                    while (candidates.size() > 0)
+                    {
+                        selected.push_back(candidates.top().second);
+                        candidates.pop();
+                    }
+                    // The closest first, then the links the neighbor holds now, while there is room.
+                    std::reverse(selected.begin(), selected.end());
+                    markElementToPersist(neigh);
                     {
                         std::unique_lock<std::mutex> lock(link_list_locks_[neigh]);
-                        linklistsizeint *ll_cur;
-                        ll_cur = get_linklist_at_level(neigh, layer);
-                        size_t candSize = candidates.size();
-                        setListCount(ll_cur, candSize);
-                        tableint *data = (tableint *)(ll_cur + 1);
-                        for (size_t idx = 0; idx < candSize; idx++)
-                        {
-                            data[idx] = candidates.top().second;
-                            candidates.pop();
-                        }
+                        mergeLinkList(get_linklist_at_level(neigh, layer), selected, layer == 0 ? maxM0_ : maxM_);
                     }
                 }
             }
 
-            repairConnectionsForUpdate(newPoint, entryPointCopy, internalId, elemLevel, maxLevelCopy);
+            repairConnectionsForUpdate(newPoint, entryPointCopy, internalId, elemLevel, maxLevelCopy, keepElementLinks);
         }
 
         void repairConnectionsForUpdate(
@@ -1814,7 +1860,8 @@ namespace hnswlib
             tableint entryPointInternalId,
             tableint dataPointInternalId,
             int dataPointLevel,
-            int maxLevel)
+            int maxLevel,
+            bool keepElementLinks = true)
         {
             tableint currObj = entryPointInternalId;
             if (dataPointLevel < maxLevel)
@@ -1881,7 +1928,7 @@ namespace hnswlib
                             filteredTopCandidates.pop();
                     }
 
-                    currObj = mutuallyConnectNewElement(dataPoint, dataPointInternalId, filteredTopCandidates, level, true);
+                    currObj = mutuallyConnectNewElement(dataPoint, dataPointInternalId, filteredTopCandidates, level, true, keepElementLinks);
                 }
             }
         }
