@@ -1930,6 +1930,12 @@ namespace hnswlib
 
                     currObj = mutuallyConnectNewElement(dataPoint, dataPointInternalId, filteredTopCandidates, level, true, keepElementLinks);
                 }
+                else if (!keepElementLinks)
+                {
+                    // No other element to link to: a reused slot must not keep the links of the element it replaced.
+                    std::unique_lock<std::mutex> lock(link_list_locks_[dataPointInternalId]);
+                    setListCount(get_linklist_at_level(dataPointInternalId, level), 0);
+                }
             }
         }
 

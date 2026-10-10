@@ -6,7 +6,7 @@
 
 // Replacing a deleted element must not give the new element the links of the old one: the new element's list on
 // layer 0 holds only elements near its own vector.
-int main()
+int testReplacedElementLinksNearItsVector()
 {
     const int dim = 2;
     const int clusterSize = 20;
@@ -47,4 +47,43 @@ int main()
     }
     std::cout << "Replaced element has " << size << " links, all near its own vector\n";
     return 0;
+}
+
+// When every other element is deleted, the search finds no element to link to: the reused slot must not keep the
+// links of the element it replaced either.
+int testReplacedElementWithEveryOtherDeleted()
+{
+    const int dim = 2;
+    hnswlib::L2Space space(dim);
+    hnswlib::HierarchicalNSW<float> index(&space, 2, 16, 200, 100, true);
+
+    std::vector<float> point = {0.0f, 0.0f};
+    index.addPoint(point.data(), 0);
+    point = {1.0f, 1.0f};
+    index.addPoint(point.data(), 1);
+    index.markDelete(0);
+    index.markDelete(1);
+
+    point = {5.0f, 5.0f};
+    index.addPoint(point.data(), 2, true);
+    hnswlib::tableint reused = index.label_lookup_[2];
+    for (int level = 0; level <= index.element_levels_[reused]; level++)
+    {
+        int size = index.getListCount(index.get_linklist_at_level(reused, level));
+        if (size != 0)
+        {
+            std::cout << "The reused element keeps " << size << " links of the element it replaced on layer " << level
+                      << "\n";
+            return 1;
+        }
+    }
+    std::cout << "Replaced element with every other element deleted has no links\n";
+    return 0;
+}
+
+int main()
+{
+    int failed = testReplacedElementLinksNearItsVector();
+    failed += testReplacedElementWithEveryOtherDeleted();
+    return failed == 0 ? 0 : 1;
 }
