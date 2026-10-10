@@ -1,6 +1,5 @@
 #include "../../hnswlib/hnswlib.h"
 
-#include <assert.h>
 #include <iostream>
 #include <vector>
 
@@ -30,7 +29,11 @@ int testReplacedElementLinksNearItsVector()
     point[1] = 100.5f;
     index.addPoint(point.data(), 1000, true);
     hnswlib::tableint reused = index.label_lookup_[1000];
-    assert(reused == replaced);
+    if (reused != replaced)
+    {
+        std::cout << "The new element did not reuse the slot of the deleted element\n";
+        return 1;
+    }
 
     hnswlib::linklistsizeint *list = index.get_linklist0(reused);
     int size = index.getListCount(list);
