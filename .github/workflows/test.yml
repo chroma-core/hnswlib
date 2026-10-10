@@ -82,6 +82,8 @@ jobs:
           ./test_updates
           ./test_updates update
           ./persistent_test
+          ./replace_links_test
+          ./update_links_test
         shell: bash
 
   test_rust:
