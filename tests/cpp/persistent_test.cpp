@@ -5,6 +5,7 @@
 
 #include <vector>
 #include <iostream>
+#include <fstream>
 
 namespace
 {
@@ -365,6 +366,85 @@ namespace
             }
         }
     }
+
+    std::streamoff linkListFileSize()
+    {
+        std::ifstream f("link_lists.bin", std::ios::binary | std::ios::ate);
+        assert(f.is_open());
+        return f.tellg();
+    }
+
+    // A single bad linkListSize used to be turned into element_levels_[i] as is.
+    // persistDirty() then used that level as a seek stride, so the next persist wrote
+    // past the end of link_lists.bin and kept growing it on every cycle.
+    void testCorruptLinkListIsRejected()
+    {
+        int d = 16;
+        idx_t n = 200;
+
+        std::vector<float> data(n * d);
+
+        std::mt19937 rng;
+        rng.seed(47);
+        std::uniform_real_distribution<> distrib;
+
+        for (idx_t i = 0; i < n * d; i++)
+        {
+            data[i] = distrib(rng);
+        }
+
+        hnswlib::InnerProductSpace space(d);
+        {
+            hnswlib::HierarchicalNSW<float> alg_hnsw(&space, n, 16, 200, 100, false, false, true, ".");
+            for (size_t i = 0; i < n; i++)
+            {
+                alg_hnsw.addPoint(data.data() + d * i, i);
+            }
+            alg_hnsw.persistDirty();
+        }
+
+        std::streamoff healthy_size = linkListFileSize();
+        assert(healthy_size > 0);
+
+        // Overwrite the first non-zero record header with a neighbour node id, which is
+        // what the reader picks up once a torn record desynchronises the stream.
+        {
+            std::fstream f("link_lists.bin", std::ios::binary | std::ios::in | std::ios::out);
+            assert(f.is_open());
+            std::streamoff pos = 0;
+            unsigned int linkListSize = 0;
+            for (size_t i = 0; i < n; i++)
+            {
+                f.seekg(pos);
+                f.read((char *)&linkListSize, sizeof(linkListSize));
+                assert(f.gcount() == (std::streamsize)sizeof(linkListSize));
+                if (linkListSize != 0)
+                    break;
+                // A level 0 element is stored as a bare size of zero.
+                pos += sizeof(linkListSize);
+            }
+            assert(linkListSize != 0);
+
+            unsigned int garbage = (unsigned int)n - 1;
+            f.seekp(pos);
+            f.write((const char *)&garbage, sizeof(garbage));
+        }
+
+        bool rejected = false;
+        try
+        {
+            hnswlib::HierarchicalNSW<float> alg_hnsw2(&space, ".", false, n, false, false, true);
+        }
+        catch (const std::runtime_error &)
+        {
+            rejected = true;
+        }
+        assert(rejected);
+
+        // The load has to fail before the index takes ownership of the files, otherwise
+        // the next persistDirty() seeks past the end of this one and grows it.
+        assert(linkListFileSize() == healthy_size);
+    }
 }
 
 void test_persist_empty() {
@@ -605,6 +685,8 @@ int main()
     std::cout << "Test testAddUpdatePersistentIndex ok" << std::endl;
     testDeletePersistentIndex();
     std::cout << "Test testDeletePersistentIndex ok" << std::endl;
+    testCorruptLinkListIsRejected();
+    std::cout << "Test testCorruptLinkListIsRejected ok" << std::endl;
     test_persist_empty();
     std::cout << "Test test_persist_empty ok" << std::endl;
     test_persist_size(1);

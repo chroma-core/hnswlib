@@ -1366,9 +1366,6 @@ pub mod test {
     }
 
     #[test]
-    // TODO(rescrv,sicheng):  This test should be re-enabled once we have a way to detect
-    // corruption.
-    #[ignore]
     fn it_can_detect_corruption() {
         let n = 1000;
         let d: usize = 960;
@@ -1427,7 +1424,7 @@ pub mod test {
             .map(|_| ())
             .unwrap_err()
             .to_string()
-            .contains("HNSW Integrity failure"))
+            .contains("Link lists are corrupt"))
     }
 
     #[test]
