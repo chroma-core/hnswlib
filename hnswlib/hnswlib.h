@@ -217,5 +217,6 @@ namespace hnswlib
 
 #include "space_l2.h"
 #include "space_ip.h"
+#include "turbo_quant.h"
 #include "bruteforce.h"
 #include "hnswalg.h"
