@@ -65,4 +65,7 @@ if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
 
     add_executable(integrity_test tests/cpp/integrity_test.cpp)
     target_link_libraries(integrity_test hnswlib)
+
+    add_executable(persistedHeaderValidation_test tests/cpp/persistedHeaderValidation_test.cpp)
+    target_link_libraries(persistedHeaderValidation_test hnswlib)
 endif()
