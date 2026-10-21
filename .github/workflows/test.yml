@@ -16,9 +16,15 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest]
         python-version: ["3.8", "3.9", "3.10"]
+        include:
+          # Native ARM64 Python and numpy wheels on Windows are only available for 3.11+
+          - os: windows-11-arm
+            python-version: "3.11"
+          - os: windows-11-arm
+            python-version: "3.12"
     steps:
       - uses: actions/checkout@v3
-      - uses: actions/setup-python@v4
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -35,18 +41,22 @@ jobs:
     runs-on: ${{matrix.os}}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest, windows-11-arm]
     steps:
       - uses: actions/checkout@v3
-      - uses: actions/setup-python@v4
+      - uses: actions/setup-python@v7
         with:
-          python-version: "3.10"
+          python-version: ${{ matrix.os == 'windows-11-arm' && '3.11' || '3.10' }}
 
       - name: Build
         run: |
           mkdir build
           cd build
-          cmake ..
+          if [ "$RUNNER_OS" == "Windows" ] && [ "$RUNNER_ARCH" == "ARM64" ]; then
+            cmake .. -A ARM64
+          else
+            cmake ..
+          fi
           if [ "$RUNNER_OS" == "Linux" ]; then
             make
           elif [ "$RUNNER_OS" == "Windows" ]; then
@@ -88,7 +98,7 @@ jobs:
     runs-on: ${{matrix.os}}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest, windows-11-arm]
     env:
       CARGO_TERM_COLOR: always
     steps:

@@ -15,31 +15,34 @@ jobs:
     runs-on: ${{matrix.os}}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        # One native runner per architecture, built with CIBW_ARCHS=auto64
+        os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, windows-11-arm, macos-latest, macos-15-intel]
     steps:
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v2
-        if: matrix.os == 'ubuntu-latest'
       - uses: actions/checkout@v3
-      - uses: actions/setup-python@v4
+      - uses: actions/setup-python@v7
         with:
-          python-version: '3.10'
+          # windows-11-arm only has native ARM64 builds of Python 3.11+
+          python-version: '3.11'
       - name: Install cibuildwheel
-        run: python -m pip install cibuildwheel==2.19.1
+        # 2.23.x is the last series that can still build cp37 wheels
+        run: python -m pip install cibuildwheel==2.23.4
       - name: Build wheels
         run: python -m cibuildwheel --output-dir dist
         env:
-          CIBW_ENVIRONMENT: HNSWLIB_NO_NATIVE=true
+          # PIP_ONLY_BINARY=numpy: newer numpy releases have no manylinux2014 wheels and
+          # can't be built from source there, so use the newest available numpy wheel.
+          CIBW_ENVIRONMENT: HNSWLIB_NO_NATIVE=true PIP_ONLY_BINARY=numpy
           CIBW_ENVIRONMENT_PASS_LINUX: HNSWLIB_NO_NATIVE
           CIBW_PROJECT_REQUIRES_PYTHON: ">=3.7"
-          CIBW_SKIP: "pp* *musllinux* cp312-win*"
-          CIBW_ARCHS_MACOS: "x86_64 arm64"
-          CIBW_ARCHS_WINDOWS: "AMD64"
-          CIBW_ARCHS_LINUX: "x86_64 aarch64"
+          CIBW_BUILD: "cp37-* cp38-* cp39-* cp310-* cp311-* cp312-*"
+          # cp312-win_amd64: workaround for chroma-core/chroma#2513.
+          # win_arm64 < cp311: numpy has no win_arm64 wheels for these versions.
+          CIBW_SKIP: "pp* *musllinux* cp312-win_amd64 cp39-win_arm64 cp310-win_arm64"
+          CIBW_ARCHS: auto64
       - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v7
         with:
-          name: python-package-distributions
+          name: python-package-distributions-${{ matrix.os }}
           path: dist
 
   upload:
@@ -47,7 +50,7 @@ jobs:
     needs: build
     steps:
     - uses: actions/checkout@v3
-    - uses: actions/setup-python@v4
+    - uses: actions/setup-python@v7
       with:
         python-version: "3.10"
     - name: Build sdist
@@ -55,9 +58,10 @@ jobs:
         python -m pip install .
         make dist
     - name: Download wheels
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v8
       with:
-        name: python-package-distributions
+        pattern: python-package-distributions-*
+        merge-multiple: true
         path: dist/
     - name: Publish to Test PyPI
       uses: pypa/gh-action-pypi-publish@release/v1
