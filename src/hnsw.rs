@@ -837,6 +837,22 @@ pub mod test {
             }
         });
         assert_eq!(index.get_ef().unwrap(), 128);
+
+        index.set_ef(1).unwrap();
+        let point = &points[witness];
+        assert_eq!(
+            index
+                .query_with_ef(point, 3, &allowed, &disallowed, Some(128))
+                .unwrap(),
+            high[witness],
+        );
+        assert_eq!(
+            index
+                .query_with_ef(point, 3, &allowed, &disallowed, None)
+                .unwrap(),
+            low[witness],
+        );
+        assert_eq!(index.get_ef().unwrap(), 1);
     }
 
     #[test]
