@@ -194,7 +194,16 @@ public:
     appr_alg->markDelete(id);
   }
 
-  size_t knn_query(const data_t *query_vector, const size_t k, hnswlib::labeltype *ids, data_t *distance, const hnswlib::labeltype *allowed_ids, const size_t allowed_id_length, const hnswlib::labeltype *disallowed_ids, const size_t disallowed_id_length)
+  size_t knn_query(
+      const data_t *query_vector,
+      const size_t k,
+      hnswlib::labeltype *ids,
+      data_t *distance,
+      const hnswlib::labeltype *allowed_ids,
+      const size_t allowed_id_length,
+      const hnswlib::labeltype *disallowed_ids,
+      const size_t disallowed_id_length,
+      const size_t *ef_search)
   {
     if (!index_inited)
     {
@@ -218,7 +227,8 @@ public:
       }
     }
     AllowAndDisallowListFilterFunctor filter = AllowAndDisallowListFilterFunctor(allow_list, disallow_list);
-    std::priority_queue<std::pair<dist_t, hnswlib::labeltype>> res = appr_alg->searchKnn(query_vector, k, &filter);
+    auto res = ef_search ? appr_alg->searchKnnWithEf(query_vector, k, *ef_search, &filter)
+                         : appr_alg->searchKnn(query_vector, k, &filter);
     int total_results = std::min(res.size(), k);
     for (int i = total_results - 1; i >= 0; i--)
     {
@@ -417,12 +427,22 @@ extern "C"
   }
 
   // Can throw std::exception
-  size_t knn_query(Index<float> *index, const float *query_vector, const size_t k, hnswlib::labeltype *ids, float *distance, const hnswlib::labeltype *allowed_ids, const size_t allowed_id_length, const hnswlib::labeltype *disallowed_ids, const size_t disallowed_id_length)
+  size_t knn_query_with_ef(
+      Index<float> *index,
+      const float *query_vector,
+      const size_t k,
+      hnswlib::labeltype *ids,
+      float *distance,
+      const hnswlib::labeltype *allowed_ids,
+      const size_t allowed_id_length,
+      const hnswlib::labeltype *disallowed_ids,
+      const size_t disallowed_id_length,
+      const size_t *ef_search)
   {
     size_t result;
     try
     {
-      result = index->knn_query(query_vector, k, ids, distance, allowed_ids, allowed_id_length, disallowed_ids, disallowed_id_length);
+      result = index->knn_query(query_vector, k, ids, distance, allowed_ids, allowed_id_length, disallowed_ids, disallowed_id_length, ef_search);
     }
     catch (std::exception &e)
     {
@@ -431,6 +451,11 @@ extern "C"
     }
     last_error.clear();
     return result;
+  }
+
+  size_t knn_query(Index<float> *index, const float *query_vector, const size_t k, hnswlib::labeltype *ids, float *distance, const hnswlib::labeltype *allowed_ids, const size_t allowed_id_length, const hnswlib::labeltype *disallowed_ids, const size_t disallowed_id_length)
+  {
+    return knn_query_with_ef(index, query_vector, k, ids, distance, allowed_ids, allowed_id_length, disallowed_ids, disallowed_id_length, nullptr);
   }
 
   // Can throw std::exception

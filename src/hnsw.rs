@@ -64,7 +64,7 @@ extern "C" {
         non_deleted_ids: *mut usize,
         deleted_ids: *mut usize,
     );
-    fn knn_query(
+    fn knn_query_with_ef(
         index: *const HnswIndexPtrFFI,
         query_vector: *const f32,
         k: usize,
@@ -74,7 +74,8 @@ extern "C" {
         allowed_ids_length: usize,
         disallowed_ids: *const usize,
         disallowed_ids_length: usize,
-    ) -> c_int;
+        ef_search: Option<&usize>,
+    ) -> usize;
     fn open_fd(index: *const HnswIndexPtrFFI);
     fn close_fd(index: *const HnswIndexPtrFFI);
     fn get_ef(index: *const HnswIndexPtrFFI) -> c_int;
@@ -355,11 +356,23 @@ impl HnswIndex {
         allowed_ids: &[usize],
         disallowed_ids: &[usize],
     ) -> Result<(Vec<usize>, Vec<f32>), HnswError> {
+        self.query_with_ef(vector, k, allowed_ids, disallowed_ids, None)
+    }
+
+    /// Override the search breadth for this query, or use the index default with `None`.
+    pub fn query_with_ef(
+        &self,
+        vector: &[f32],
+        k: usize,
+        allowed_ids: &[usize],
+        disallowed_ids: &[usize],
+        ef_search: Option<usize>,
+    ) -> Result<(Vec<usize>, Vec<f32>), HnswError> {
         let actual_k = std::cmp::min(k, self.len());
         let mut ids = vec![0usize; actual_k];
         let mut distance = vec![0.0f32; actual_k];
         let total_result = unsafe {
-            knn_query(
+            knn_query_with_ef(
                 self.ffi_ptr,
                 vector.as_ptr(),
                 k,
@@ -369,7 +382,8 @@ impl HnswIndex {
                 allowed_ids.len(),
                 disallowed_ids.as_ptr(),
                 disallowed_ids.len(),
-            ) as usize
+                ef_search.as_ref(),
+            )
         };
         read_and_return_hnsw_error(self.ffi_ptr)?;
 
@@ -744,6 +758,101 @@ pub mod test {
                 assert_eq!(index.get_ef().unwrap(), 100);
             }
         }
+    }
+
+    #[test]
+    fn query_ef_is_scoped_to_each_search() {
+        assert_scoped_query_ef(Some(2));
+    }
+
+    #[test]
+    fn query_ef_is_scoped_to_each_search_without_deletions() {
+        assert_scoped_query_ef(None);
+    }
+
+    fn assert_scoped_query_ef(deleted_id: Option<usize>) {
+        use rand::{rngs::StdRng, SeedableRng};
+        use std::{sync::Barrier, thread};
+
+        let index = HnswIndex::init(HnswIndexInitConfig {
+            distance_function: HnswDistanceFunction::Euclidean,
+            dimensionality: 12,
+            max_elements: 256,
+            m: 3,
+            ef_construction: 12,
+            ef_search: 1,
+            random_seed: 0,
+            persist_path: None,
+        })
+        .unwrap();
+        let mut rng = StdRng::seed_from_u64(7963);
+        let points: Vec<[f32; 12]> = (0..256).map(|_| rng.gen()).collect();
+        for (id, point) in points.iter().enumerate() {
+            index.add(id, point).unwrap();
+        }
+        if let Some(id) = deleted_id {
+            index.delete(id).unwrap();
+        }
+        let allowed: Vec<_> = (0..256).step_by(2).collect();
+        let disallowed = [0, 6];
+        let default_results = || {
+            points
+                .iter()
+                .map(|point| index.query(point, 3, &allowed, &disallowed).unwrap())
+                .collect::<Vec<_>>()
+        };
+        let low = default_results();
+        index.set_ef(128).unwrap();
+        let high = default_results();
+        let witness = (0..points.len())
+            .find(|&i| low[i] != high[i])
+            .expect("the fixture must distinguish low and high search breadth");
+        for result in [&low[witness], &high[witness]] {
+            assert_eq!(result.0.len(), 3);
+            assert!(result.0.iter().all(|id| allowed.contains(id)
+                && !disallowed.contains(id)
+                && Some(*id) != deleted_id));
+        }
+
+        let barrier = Barrier::new(3);
+        thread::scope(|scope| {
+            for (ef_search, expected) in [
+                (Some(1), &low[witness]),
+                (Some(128), &high[witness]),
+                (None, &high[witness]),
+            ] {
+                let barrier = &barrier;
+                let index = &index;
+                let point = &points[witness];
+                let allowed = &allowed;
+                scope.spawn(move || {
+                    barrier.wait();
+                    for _ in 0..32 {
+                        let result = index
+                            .query_with_ef(point, 3, allowed, &disallowed, ef_search)
+                            .unwrap();
+                        assert_eq!(&result, expected);
+                    }
+                });
+            }
+        });
+        assert_eq!(index.get_ef().unwrap(), 128);
+
+        index.set_ef(1).unwrap();
+        let point = &points[witness];
+        assert_eq!(
+            index
+                .query_with_ef(point, 3, &allowed, &disallowed, Some(128))
+                .unwrap(),
+            high[witness],
+        );
+        assert_eq!(
+            index
+                .query_with_ef(point, 3, &allowed, &disallowed, None)
+                .unwrap(),
+            low[witness],
+        );
+        assert_eq!(index.get_ef().unwrap(), 1);
     }
 
     #[test]
