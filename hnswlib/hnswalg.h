@@ -2047,6 +2047,16 @@ namespace hnswlib
         std::priority_queue<std::pair<dist_t, labeltype>>
         searchKnn(const void *query_data, size_t k, BaseFilterFunctor *isIdAllowed = nullptr) const
         {
+            return searchKnnWithEf(query_data, k, ef_, isIdAllowed);
+        }
+
+        /**
+         * Find up to k allowed neighbors using a search breadth of at least max(ef, k).
+         * The breadth applies only to this query and leaves the index default unchanged.
+         */
+        std::priority_queue<std::pair<dist_t, labeltype>>
+        searchKnnWithEf(const void *query_data, size_t k, size_t ef, BaseFilterFunctor *isIdAllowed = nullptr) const
+        {
             std::priority_queue<std::pair<dist_t, labeltype>> result;
             if (cur_element_count == 0)
                 return result;
@@ -2070,7 +2080,7 @@ namespace hnswlib
                     for (int i = 0; i < size; i++)
                     {
                         tableint cand = datal[i];
-                        if (cand < 0 || cand > max_elements_)
+                        if (cand > max_elements_)
                             throw std::runtime_error("cand error");
                         dist_t d = fstdistfunc_(query_data, getDataByInternalId(cand), dist_func_param_);
 
@@ -2088,12 +2098,12 @@ namespace hnswlib
             if (num_deleted_)
             {
                 top_candidates = searchBaseLayerST<true, true>(
-                    currObj, query_data, std::max(ef_, k), isIdAllowed);
+                    currObj, query_data, std::max(ef, k), isIdAllowed);
             }
             else
             {
                 top_candidates = searchBaseLayerST<false, true>(
-                    currObj, query_data, std::max(ef_, k), isIdAllowed);
+                    currObj, query_data, std::max(ef, k), isIdAllowed);
             }
 
             while (top_candidates.size() > k)
